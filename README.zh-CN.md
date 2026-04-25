@@ -320,3 +320,7 @@ resource-hunter/
 ## 许可
 
 [MIT-0](./LICENSE) — 无需署名。
+
+## 反馈与交流
+
+如果你在使用过程中遇到任何 Bug，有新的功能需求（例如添加新的网盘或磁力源），或者对自定义适配器有任何疑问，非常欢迎你在 GitHub 提交 [Issue](https://github.com/mnbplus/resource-hunter/issues/new) 与我们交流。同时也强烈欢迎提交 PR！

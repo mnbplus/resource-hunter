@@ -354,3 +354,7 @@ python -m pytest tests/ -v
 ## License
 
 [MIT-0](./LICENSE) — no attribution required.
+
+## Feedback and Issues
+
+If you encounter any bugs, have feature requests, or need help with custom source adapters, please [open an issue](https://github.com/mnbplus/resource-hunter/issues/new) on GitHub. Pull requests are also highly welcome!
