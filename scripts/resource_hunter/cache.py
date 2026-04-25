@@ -285,7 +285,8 @@ class ResourceCache:
             deleted["alias_resolution"] = cursor.rowcount
             cursor = conn.execute("delete from source_status where checked_epoch < ?", (cutoff,))
             deleted["source_status"] = cursor.rowcount
-            cursor = conn.execute("delete from video_manifest where created_at < ?", (cutoff * 7,))
+            video_cutoff = now - max_age_seconds * 7
+            cursor = conn.execute("delete from video_manifest where created_at < ?", (video_cutoff,))
             deleted["video_manifest"] = cursor.rowcount
         return deleted
 

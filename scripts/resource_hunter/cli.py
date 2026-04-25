@@ -251,7 +251,7 @@ def _subtitle(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Resource Hunter v4")
+    parser = argparse.ArgumentParser(description="Resource Hunter")
     sub = parser.add_subparsers(dest="command")
 
     p_search = sub.add_parser("search", help="Search public pan/torrent resources")

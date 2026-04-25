@@ -73,7 +73,14 @@ class SourceRegistry:
             self._torrent.append(adapter)
 
     def register_defaults(self) -> None:
-        self._pan = [UpyunsoSource(), Ps252035Source(), PanhuntSource(), HunhepanSource()]
+        from .upyunso import _HAS_CRYPTO
+        import logging
+        _logger = logging.getLogger(__name__)
+        if _HAS_CRYPTO:
+            self._pan = [UpyunsoSource(), Ps252035Source(), PanhuntSource(), HunhepanSource()]
+        else:
+            _logger.warning("upyunso disabled: pycryptodome / pycryptodomex not installed (pip install pycryptodome)")
+            self._pan = [Ps252035Source(), PanhuntSource(), HunhepanSource()]
         self._torrent = [TorznabSource(), NyaaSource(), EZTVSource(), BitsearchSource(), TPBSource(), YTSSource(), OneThreeThreeSevenXSource(), LimeTorrentsSource(), FitGirlSource(), TorrentMacSource(), AnnasArchiveSource()]
 
     def _load_local_sources(self) -> None:

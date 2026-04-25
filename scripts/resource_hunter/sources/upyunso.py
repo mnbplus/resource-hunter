@@ -25,9 +25,17 @@ from ..models import SearchIntent, SearchResult
 try:
     from Crypto.Cipher import AES
     from Crypto.Util.Padding import pad, unpad
+    _HAS_CRYPTO = True
 except ImportError:
-    from Cryptodome.Cipher import AES  # type: ignore[no-redef]
-    from Cryptodome.Util.Padding import pad, unpad  # type: ignore[no-redef]
+    try:
+        from Cryptodome.Cipher import AES  # type: ignore[no-redef]
+        from Cryptodome.Util.Padding import pad, unpad  # type: ignore[no-redef]
+        _HAS_CRYPTO = True
+    except ImportError:
+        _HAS_CRYPTO = False
+        AES = None  # type: ignore[assignment,misc]
+        pad = None  # type: ignore[assignment]
+        unpad = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 

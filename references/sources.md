@@ -1,4 +1,4 @@
-# Resource Hunter v4 Sources
+# Resource Hunter Sources
 
 ## Pan sources
 

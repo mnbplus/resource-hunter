@@ -9,7 +9,7 @@
 </div>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-4.1.0-d4af37?style=for-the-badge" alt="Version 4.1.0">
+  <img src="https://img.shields.io/badge/version-1.0.0-d4af37?style=for-the-badge" alt="Version 1.0.0">
   <img src="https://img.shields.io/badge/python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=fff" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/benchmark-pass-10b981?style=for-the-badge" alt="Benchmark Pass">
   <img src="https://img.shields.io/badge/zero--config-true-0ea5e9?style=for-the-badge" alt="Zero Config">
@@ -22,7 +22,7 @@
 
 Resource Hunter is a **resource discovery engine** designed to be called by AI Agents (Hermes, OpenClaw, etc.).
 
-It doesn't download files — it **finds** the best public routes (cloud drive links, magnet URIs, ebook pages) across 16 sources, ranks them by quality, verifies liveness, and returns structured JSON.
+It doesn't download files — it **finds** the best public routes (cloud drive links, magnet URIs, ebook pages) across 15 sources, ranks them by quality, verifies liveness, and returns structured JSON.
 
 ```
 User: "帮我找 Oppenheimer 4K 资源"
@@ -41,7 +41,7 @@ Engine returns:
 
 ### 🔍 Multi-Source Aggregation
 
-16 source adapters across 3 channels:
+15 source adapters across 3 channels:
 
 | Channel | Sources | What they cover |
 |:--------|:--------|:----------------|
@@ -82,7 +82,7 @@ Public video URL → metadata extraction → optional download:
 
 ```bash
 hunt.py video probe "https://www.bilibili.com/video/BV..."
-hunt.py video download "https://youtu.be/..." --quality 1080p
+hunt.py video download "https://youtu.be/..." best
 ```
 
 ### 📖 Subtitle Search
@@ -292,7 +292,7 @@ resource-hunter/
 │       ├── cache.py               # SQLite WAL cache
 │       ├── video_core.py          # Public video pipeline (yt-dlp)
 │       ├── subdl.py / subhd.py / jimaku.py   # Subtitle sources
-│       └── sources/               # 16 source adapters
+│       └── sources/               # 15 source adapters
 │           ├── base.py            # HTTPClient (httpx → curl_cffi → urllib)
 │           ├── upyunso.py         # Cloud drive aggregator (AES encrypted API)
 │           ├── nyaa.py            # Anime torrents (RSS)

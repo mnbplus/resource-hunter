@@ -6,7 +6,7 @@ Initial release.
 
 ### Features
 
-- Multi-source search across 16 adapters (4 pan aggregators, 11 torrent indexers, 1 book source)
+- Multi-source search across 15 adapters (4 pan aggregators, 10 torrent indexers, 1 book source)
 - Quality-aware ranking with title-family matching, season/episode parsing, and release tag scoring
 - Pan link viability probing (Aliyun, Quark, Baidu) with automatic dead-link demotion
 - Anti-bot defense chain: httpx → curl_cffi → urllib (auto-fallback)

@@ -1,4 +1,4 @@
-# Resource Hunter v4 Architecture
+# Resource Hunter Architecture
 
 ## Layout
 
@@ -16,11 +16,11 @@
 - `scripts/resource_hunter/rendering.py`: text renderers and compatibility transforms
 - `scripts/resource_hunter/engine.py`: orchestration, cache integration, source health, benchmark entrypoint
 - `scripts/resource_hunter/benchmark.py`: offline deterministic benchmark suite
-- `scripts/resource_hunter/video_core.py`: deterministic yt-dlp workflow and manifest handling
+- `scripts/resource_hunter/video_core.py`: yt-dlp workflow and manifest handling
 - `scripts/resource_hunter/cli.py`: unified CLI surface
 - `scripts/resource_hunter/exceptions.py`: custom exception hierarchy
 
-## Source adapters (v4 plugin architecture)
+## Source adapters (plugin architecture)
 
 ```text
 sources/
@@ -69,7 +69,7 @@ SQLite database stores:
 
 - `search_cache`: short-TTL normalized responses
 - `source_status`: rolling source health results, degraded reasons, and recovery state
-- `video_manifest`: deterministic download/subtitle artifacts keyed by task id
+- `video_manifest`: download/subtitle artifacts keyed by task id
 - `alias_resolution`: cached public alias expansion for multilingual movie queries
 
 The circuit breaker skips sources that have failed repeatedly in the recent cooldown window.

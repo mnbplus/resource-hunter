@@ -9,7 +9,7 @@
 </div>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-4.1.0-d4af37?style=for-the-badge" alt="版本 4.1.0">
+  <img src="https://img.shields.io/badge/version-1.0.0-d4af37?style=for-the-badge" alt="版本 1.0.0">
   <img src="https://img.shields.io/badge/python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=fff" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/benchmark-pass-10b981?style=for-the-badge" alt="基准通过">
   <img src="https://img.shields.io/badge/零配置-true-0ea5e9?style=for-the-badge" alt="零配置">
@@ -22,7 +22,7 @@
 
 Resource Hunter 是一个**资源发现引擎**，设计用于被 AI Agent（Hermes、OpenClaw 等）调用。
 
-它不负责下载——它**搜索**最佳公共路由（网盘链接、磁力 URI、电子书页面），跨 16 个源进行排序、验证存活性，返回结构化 JSON。
+它不负责下载——它**搜索**最佳公共路由（网盘链接、磁力 URI、电子书页面），跨 15 个源进行排序、验证存活性，返回结构化 JSON。
 
 ```
 用户："帮我找 Oppenheimer 4K 资源"
@@ -41,7 +41,7 @@ Agent 翻译 → hunt.py search "Oppenheimer 2023" --4k --json
 
 ### 🔍 多源聚合
 
-16 个源适配器，覆盖 3 个通道：
+15 个源适配器，覆盖 3 个通道：
 
 | 通道 | 源 | 覆盖范围 |
 |:-----|:---|:---------|
@@ -82,7 +82,7 @@ Agent 翻译 → hunt.py search "Oppenheimer 2023" --4k --json
 
 ```bash
 hunt.py video probe "https://www.bilibili.com/video/BV..."
-hunt.py video download "https://youtu.be/..." --quality 1080p
+hunt.py video download "https://youtu.be/..." best
 ```
 
 ### 📖 字幕搜索
@@ -277,7 +277,7 @@ resource-hunter/
 │       ├── parsers.py             # 发布标签解析（分辨率、编码、HDR）
 │       ├── video_core.py          # 公共视频流水线（yt-dlp）
 │       ├── subdl.py / subhd.py / jimaku.py   # 字幕源
-│       └── sources/               # 16 个源适配器
+│       └── sources/               # 15 个源适配器
 │           ├── base.py            # HTTPClient（httpx → curl_cffi → urllib）
 │           ├── upyunso.py         # 网盘聚合器（AES 加密 API）
 │           ├── nyaa.py            # 动漫种子（RSS）

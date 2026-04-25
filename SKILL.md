@@ -20,7 +20,7 @@ metadata:
 
 ## Overview
 
-Public resource discovery engine for AI agents. Finds the best download routes across 16 sources (cloud drives, torrents, ebooks), ranks by quality, verifies link liveness, and returns structured JSON. Operates on public data only — no login, no DRM bypass.
+Public resource discovery engine for AI agents. Finds the best download routes across 15 sources (cloud drives, torrents, ebooks), ranks by quality, verifies link liveness, and returns structured JSON. Operates on public data only — no login, no DRM bypass.
 
 ## When to Use
 
@@ -58,7 +58,7 @@ python3 "$SKILL_DIR/hunt.py" search "Interstellar 2014" --no-probe
 
 # Video pipeline
 python3 "$SKILL_DIR/hunt.py" video probe "https://www.bilibili.com/video/BV..."
-python3 "$SKILL_DIR/hunt.py" video download "https://youtu.be/..." --quality 1080p
+python3 "$SKILL_DIR/hunt.py" video download "https://youtu.be/..." best
 
 # Subtitles (user-initiated, not automatic)
 python3 "$SKILL_DIR/hunt.py" subtitle "Breaking Bad" --season 1 --episode 1 --lang zh,en --json
