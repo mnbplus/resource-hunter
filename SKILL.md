@@ -1,6 +1,6 @@
 ---
 name: quarry
-version: 1.1.0
+version: 1.2.0
 description: >-
   Use when finding public download routes for movies, TV, anime, music,
   software, or books. Searches pan/torrent/book sources with quality-aware
@@ -20,7 +20,7 @@ metadata:
 
 ## Overview
 
-Public resource discovery engine for AI agents. Finds the best download routes across 21 sources (cloud drives, torrents, ebooks), ranks by quality, verifies link liveness, and returns structured JSON. Operates on public data only — no login, no DRM bypass.
+Public resource discovery engine for AI agents. Finds the best download routes across 24 sources (cloud drives, torrents, ebooks), ranks by quality, verifies link liveness, and returns structured JSON. Operates on public data only — no login, no DRM bypass.
 
 ## When to Use
 

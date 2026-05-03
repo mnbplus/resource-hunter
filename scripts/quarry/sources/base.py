@@ -194,6 +194,21 @@ SOURCE_RUNTIME_PROFILES: dict[str, SourceRuntimeProfile] = {
         supported_kinds=("anime",),
         timeout=8, retries=1, degraded_score_penalty=0, cooldown_seconds=180, failure_threshold=2, query_budget=2,
     ),
+    "knaben": SourceRuntimeProfile(
+        supported_kinds=("movie", "tv", "anime", "music", "software", "book", "general"),
+        timeout=12, retries=0, degraded_score_penalty=6, cooldown_seconds=180, failure_threshold=2, query_budget=2,
+        default_degraded=True,
+    ),
+    "btdig": SourceRuntimeProfile(
+        supported_kinds=("movie", "tv", "anime", "music", "software", "general"),
+        timeout=10, retries=0, degraded_score_penalty=8, cooldown_seconds=300, failure_threshold=2, query_budget=1,
+        default_degraded=True,
+    ),
+    "solidtorrents": SourceRuntimeProfile(
+        supported_kinds=("movie", "tv", "anime", "music", "software", "book", "general"),
+        timeout=10, retries=0, degraded_score_penalty=6, cooldown_seconds=180, failure_threshold=2, query_budget=2,
+        default_degraded=True,
+    ),
 }
 
 

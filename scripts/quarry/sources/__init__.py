@@ -56,6 +56,9 @@ from .torrentgalaxy import TorrentGalaxySource
 from .torlock import TorLockSource
 from .ext_to import ExtToSource
 from .subsplease import SubsPleaseSource
+from .knaben import KnabenSource
+from .btdig import BTDiggSource
+from .solidtorrents import SolidTorrentsSource
 
 
 class SourceRegistry:
@@ -87,7 +90,7 @@ class SourceRegistry:
         else:
             _logger.warning("upyunso disabled: pycryptodome / pycryptodomex not installed (pip install pycryptodome)")
             self._pan = [PanSouSource(), Ps252035Source(), PanhuntSource()]
-        self._torrent = [TorznabSource(), NyaaSource(), DMHYSource(), BangumiMoeSource(), SubsPleaseSource(), EZTVSource(), TorrentGalaxySource(), BitsearchSource(), TPBSource(), YTSSource(), OneThreeThreeSevenXSource(), LimeTorrentsSource(), TorLockSource(), FitGirlSource(), TorrentMacSource(), ExtToSource(), AnnasArchiveSource()]
+        self._torrent = [TorznabSource(), NyaaSource(), DMHYSource(), BangumiMoeSource(), SubsPleaseSource(), EZTVSource(), TorrentGalaxySource(), BitsearchSource(), TPBSource(), YTSSource(), OneThreeThreeSevenXSource(), LimeTorrentsSource(), TorLockSource(), FitGirlSource(), TorrentMacSource(), ExtToSource(), AnnasArchiveSource(), KnabenSource(), BTDiggSource(), SolidTorrentsSource()]
 
     def _load_local_sources(self) -> None:
         """Auto-discover custom source adapters from ``local/sources/``."""
@@ -152,6 +155,7 @@ def default_adapters() -> tuple[list[SourceAdapter], list[SourceAdapter]]:
 
 __all__ = [
     "AnnasArchiveSource",
+    "BTDiggSource",
     "BangumiMoeSource",
     "BitsearchSource",
     "DEFAULT_HEADERS",
@@ -160,6 +164,7 @@ __all__ = [
     "ExtToSource",
     "FitGirlSource",
     "HTTPClient",
+    "KnabenSource",
     "LimeTorrentsSource",
     "NyaaSource",
     "OneThreeThreeSevenXSource",
@@ -167,6 +172,7 @@ __all__ = [
     "PanhuntSource",
     "Ps252035Source",
     "SOURCE_RUNTIME_PROFILES",
+    "SolidTorrentsSource",
     "SourceAdapter",
     "SourceRegistry",
     "SourceRuntimeProfile",

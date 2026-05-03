@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.2.0
+
+### New Sources (Zero-Config)
+
+- **Knaben** — Torrent meta-search engine aggregating 30+ trackers via JSON API
+- **BTDigg** — DHT network indexer for long-tail/niche content via HTML scraping
+- **SolidTorrents** — Public torrent search with JSON API + HTML scraper fallback
+
+### Improvements
+
+- **Source Count**: 21 → **24** total sources (all 3 new sources are fully zero-config)
+- **Zero-Config Coverage**: 21/24 sources (88%) work without any API keys or tokens
+- **Intent Routing**: All category routes updated with new backup sources
+- **Resilience**: New sources serve as fallback layer when primary trackers are down
+
 ## 1.1.0
 
 ### New Sources
