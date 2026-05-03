@@ -9,7 +9,7 @@
 </div>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.0-d4af37?style=for-the-badge" alt="Version 1.0.0">
+  <img src="https://img.shields.io/badge/version-1.1.0-d4af37?style=for-the-badge" alt="Version 1.1.0">
   <img src="https://img.shields.io/badge/python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=fff" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/benchmark-pass-10b981?style=for-the-badge" alt="Benchmark Pass">
   <img src="https://img.shields.io/badge/zero--config-true-0ea5e9?style=for-the-badge" alt="Zero Config">
@@ -22,7 +22,7 @@
 
 Quarry is a **resource discovery engine** designed to be called by AI Agents (Hermes, OpenClaw, etc.).
 
-It doesn't download files — it **finds** the best public routes (cloud drive links, magnet URIs, ebook pages) across 15 sources, ranks them by quality, verifies liveness, and returns structured JSON.
+It doesn't download files — it **finds** the best public routes (cloud drive links, magnet URIs, ebook pages) across 21 sources, ranks them by quality, verifies liveness, and returns structured JSON.
 
 ```
 User: "Find me Oppenheimer 4K resources"
@@ -41,12 +41,12 @@ Engine returns:
 
 ### 🔍 Multi-Source Aggregation
 
-15 source adapters across 3 channels:
+21 source adapters across 3 channels:
 
 | Channel | Sources | What they cover |
 |:--------|:--------|:----------------|
-| **Cloud Drive** | upyunso, ps.252035, panhunt, hunhepan | Aliyun, Quark, Baidu, 115, Lanzou, etc. |
-| **Torrent** | torznab, nyaa, eztv, bitsearch, tpb, yts, 1337x, limetorrents, fitgirl, torrentmac | Movies, TV, anime, games, macOS apps |
+| **Cloud Drive** | upyunso, pansou, ps.252035, panhunt | Aliyun, Quark, Baidu, 115, PikPak, Lanzou, etc. |
+| **Torrent** | torznab, nyaa, dmhy, bangumi_moe, eztv, torrentgalaxy, bitsearch, tpb, yts, 1337x, limetorrents, torlock, fitgirl, torrentmac, ext_to | Movies, TV, anime, games, music, macOS apps |
 | **Book** | annas (Anna's Archive) | PDF, EPUB, MOBI — fiction & non-fiction |
 
 ### 📊 Intelligent Ranking
@@ -267,12 +267,12 @@ flowchart LR
 
 | Category | Primary → Fallback | Key Signal |
 |:---------|:-------------------|:-----------|
-| Movie | Pan → YTS/TPB → 1337x | Year match |
-| TV | EZTV/TPB → Pan | S{XX}E{XX} |
-| Anime | Nyaa → Pan | Romanized title |
-| Book | **Anna's Archive** → Pan → 1337x | Format (pdf/epub) |
-| Music | Pan → Torrent (noise-filtered) | Lossless tags |
-| Software | Pan → FitGirl/TorrentMac | Platform hint |
+| Movie | Pan → YTS/TorrentGalaxy/TPB → 1337x | Year match |
+| TV | EZTV/TorrentGalaxy/TPB → Pan | S{XX}E{XX} |
+| Anime | Nyaa/DMHY/Bangumi Moe → Pan | Romanized title |
+| Book | **Anna's Archive** → Pan → 1337x/TorLock | Format (pdf/epub) |
+| Music | Pan → DMHY/Nyaa (noise-filtered) | Lossless tags |
+| Software | Pan → FitGirl/TorrentMac/TorrentGalaxy | Platform hint |
 
 ---
 
@@ -292,10 +292,16 @@ quarry/
 │       ├── cache.py               # SQLite WAL cache
 │       ├── video_core.py          # Public video pipeline (yt-dlp)
 │       ├── subdl.py / subhd.py / jimaku.py   # Subtitle sources
-│       └── sources/               # 15 source adapters
+│       └── sources/               # 21 source adapters
 │           ├── base.py            # HTTPClient (httpx → curl_cffi → urllib)
 │           ├── upyunso.py         # Cloud drive aggregator (AES encrypted API)
+│           ├── pansou.py          # PanSou self-hosted pan aggregation API
 │           ├── nyaa.py            # Anime torrents (RSS)
+│           ├── dmhy.py            # 動漫花園 Chinese anime community (RSS)
+│           ├── bangumi_moe.py     # Bangumi Moe anime torrents (JSON API)
+│           ├── torrentgalaxy.py   # TorrentGalaxy general tracker (RARBG alt)
+│           ├── torlock.py         # TorLock verified torrents
+│           ├── ext_to.py          # EXT.to modern magnet search
 │           ├── annas.py           # Anna's Archive books (HTML scraper)
 │           ├── torznab.py         # Jackett/Prowlarr meta-indexer
 │           └── ...                # eztv, bitsearch, tpb, yts, 1337x, etc.

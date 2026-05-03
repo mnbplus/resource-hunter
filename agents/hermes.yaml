@@ -53,9 +53,10 @@ instructions: |
 
   Category-specific guidance:
     - Movie/TV/Anime: pan links are probed for viability; dead links auto-demoted
+    - Anime: uses Nyaa, DMHY, Bangumi Moe, SubsPlease as primary sources
     - Book: uses Anna's Archive as primary source; prefer --book flag for ebook queries
-    - Music: uses noise-filtered torrent sources; pan links prioritized for Chinese artists
-    - Software: routes to FitGirl (PC games), TorrentMac (macOS), and general trackers
+    - Music: uses noise-filtered torrent sources (Nyaa, DMHY); pan links prioritized for Chinese artists
+    - Software: routes to FitGirl (PC games), TorrentMac (macOS), TorrentGalaxy, and general trackers
 
   Key behaviors:
     - All output defaults to human-readable text; add --json for structured data

@@ -28,7 +28,7 @@ def test_build_plan_respects_routing_preferences():
     anime_plan = build_plan(anime)
     assert anime_plan.channels == ["torrent", "pan"]
     assert anime_plan.preferred_torrent_sources[0] == "torznab"
-    assert anime_plan.preferred_torrent_sources == ["torznab", "nyaa", "bitsearch", "tpb", "1337x", "limetorrents", "eztv", "yts"]
+    assert anime_plan.preferred_torrent_sources == ["torznab", "nyaa", "dmhy", "bangumi_moe", "bitsearch", "torrentgalaxy", "tpb", "1337x", "limetorrents", "torlock", "ext_to", "eztv", "yts"]
 
     movie = parse_intent("Oppenheimer 2023", wants_4k=True)
     movie_plan = build_plan(movie)
@@ -40,5 +40,5 @@ def test_build_plan_respects_routing_preferences():
     # Test software intent priorities
     software = parse_intent("Adobe Photoshop cc")
     software_plan = build_plan(software)
-    assert software_plan.preferred_pan_sources == ["upyunso", "ps.252035", "panhunt", "hunhepan"]
-    assert software_plan.preferred_torrent_sources == ["torznab", "torrentmac", "fitgirl", "bitsearch", "tpb", "1337x", "limetorrents", "nyaa"]
+    assert software_plan.preferred_pan_sources == ["upyunso", "pansou", "ps.252035", "panhunt"]
+    assert software_plan.preferred_torrent_sources == ["torznab", "torrentmac", "fitgirl", "torrentgalaxy", "bitsearch", "tpb", "1337x", "limetorrents", "torlock", "ext_to", "nyaa"]

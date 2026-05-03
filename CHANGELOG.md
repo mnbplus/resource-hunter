@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.1.0
+
+### New Sources
+
+- **PanSou** — Self-hosted pan aggregation API with JWT authentication
+- **DMHY (動漫花園)** — Chinese anime community tracker via RSS
+- **Bangumi Moe** — Anime torrent tracker with JSON API
+- **TorrentGalaxy** — General tracker (RARBG alternative) with rich metadata
+- **TorLock** — Verified torrent index with seeders/leechers
+- **EXT.to** — Modern magnet search engine
+- **SubsPlease** — Anime fansub group tracker
+
+### Removed Sources
+
+- **HunHePan** — Deprecated in favor of PanSou and other pan aggregators (auto-cleaned on startup)
+
+### Improvements
+
+- **HTTPClient**: Enhanced with improved error handling and retry logic
+- **Source Registry**: Expanded routing matrix for anime (Nyaa/DMHY/Bangumi Moe first) and software (TorrentGalaxy/FitGirl/TorrentMac)
+- **Ranking**: Refined scoring with adult content filtering and better music/book category handling
+- **Engine**: Optimized concurrent source fan-out with dynamic thread pool sizing
+- **Intent**: Updated preferred source lists for all categories to include new adapters
+- **Pan Probe**: Minor reliability improvements
+- **Benchmark**: Updated fixture suite for expanded source coverage
+- **Tests**: Updated precision and intent tests for new source routing
+
 ## 1.0.0
 
 Initial release.

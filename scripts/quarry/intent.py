@@ -394,33 +394,33 @@ def build_plan(intent: SearchIntent) -> SearchPlan:
 
     notes: list[str] = []
     if intent.kind == "anime":
-        preferred_pan_sources = ["upyunso", "ps.252035", "panhunt", "hunhepan"]
-        preferred_torrent_sources = ["torznab", "nyaa", "bitsearch", "tpb", "1337x", "limetorrents", "eztv", "yts"]
+        preferred_pan_sources = ["upyunso", "pansou", "ps.252035", "panhunt"]
+        preferred_torrent_sources = ["torznab", "nyaa", "dmhy", "bangumi_moe", "bitsearch", "torrentgalaxy", "tpb", "1337x", "limetorrents", "torlock", "ext_to", "eztv", "yts"]
         notes.append("anime uses bilingual variants and nyaa-first routing")
     elif intent.kind == "tv":
-        preferred_pan_sources = ["upyunso", "ps.252035", "panhunt", "hunhepan"]
-        preferred_torrent_sources = ["torznab", "eztv", "bitsearch", "tpb", "1337x", "limetorrents", "nyaa", "yts"]
+        preferred_pan_sources = ["upyunso", "pansou", "ps.252035", "panhunt"]
+        preferred_torrent_sources = ["torznab", "eztv", "torrentgalaxy", "bitsearch", "tpb", "1337x", "limetorrents", "torlock", "ext_to", "dmhy", "nyaa", "yts"]
         notes.append("tv uses strict season-episode routing before pan supplements")
     elif intent.kind == "movie":
-        preferred_pan_sources = ["upyunso", "ps.252035", "panhunt", "hunhepan"]
-        preferred_torrent_sources = ["torznab", "yts", "bitsearch", "tpb", "1337x", "limetorrents", "eztv", "nyaa"]
+        preferred_pan_sources = ["upyunso", "pansou", "ps.252035", "panhunt"]
+        preferred_torrent_sources = ["torznab", "yts", "torrentgalaxy", "bitsearch", "tpb", "1337x", "limetorrents", "torlock", "ext_to", "eztv", "nyaa"]
         notes.append("movie uses title-family plus year variants")
     elif intent.kind == "software":
-        preferred_pan_sources = ["upyunso", "ps.252035", "panhunt", "hunhepan"]
-        preferred_torrent_sources = ["torznab", "torrentmac", "fitgirl", "bitsearch", "tpb", "1337x", "limetorrents", "nyaa"]
+        preferred_pan_sources = ["upyunso", "pansou", "ps.252035", "panhunt"]
+        preferred_torrent_sources = ["torznab", "torrentmac", "fitgirl", "torrentgalaxy", "bitsearch", "tpb", "1337x", "limetorrents", "torlock", "ext_to", "nyaa"]
         notes.append("software/games uses torrentmac, fitgirl and general trackers")
     elif intent.kind == "music":
-        preferred_pan_sources = ["upyunso", "ps.252035", "panhunt", "hunhepan"]
+        preferred_pan_sources = ["upyunso", "pansou", "ps.252035", "panhunt"]
         # Music: remove high-noise sources (tpb returns adult content for artist names)
-        preferred_torrent_sources = ["torznab", "nyaa", "bitsearch", "1337x"]
+        preferred_torrent_sources = ["torznab", "nyaa", "dmhy", "bitsearch", "1337x", "torrentgalaxy", "ext_to"]
         notes.append("music uses pan-first routing with noise-filtered torrent sources")
     elif intent.kind == "book":
-        preferred_pan_sources = ["upyunso", "ps.252035", "panhunt", "hunhepan"]
-        preferred_torrent_sources = ["annas", "torznab", "bitsearch", "1337x", "limetorrents", "tpb"]
+        preferred_pan_sources = ["upyunso", "pansou", "ps.252035", "panhunt"]
+        preferred_torrent_sources = ["annas", "torznab", "bitsearch", "1337x", "limetorrents", "torrentgalaxy", "torlock", "ext_to", "tpb"]
         notes.append("book uses annas-archive-first routing with format-aware variants")
     else:
-        preferred_pan_sources = ["upyunso", "ps.252035", "panhunt", "hunhepan"]
-        preferred_torrent_sources = ["torznab", "bitsearch", "tpb", "1337x", "limetorrents", "fitgirl", "nyaa", "eztv", "yts"]
+        preferred_pan_sources = ["upyunso", "pansou", "ps.252035", "panhunt"]
+        preferred_torrent_sources = ["torznab", "torrentgalaxy", "bitsearch", "tpb", "1337x", "limetorrents", "torlock", "ext_to", "fitgirl", "dmhy", "nyaa", "eztv", "yts"]
         notes.append("non-video categories expand format/version variants before torrent fallback")
 
     if intent.wants_sub:

@@ -9,8 +9,8 @@ from __future__ import annotations
 from pathlib import Path
 
 _DEPRECATED: tuple[str, ...] = (
-    # Add entries here when files are removed in future versions.
-    # Paths are relative to the project root.
+    # v1.1.0 — hunhepan removed, replaced by pansou and other pan aggregators
+    "scripts/quarry/sources/hunhepan.py",
 )
 
 

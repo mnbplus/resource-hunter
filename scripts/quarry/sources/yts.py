@@ -12,7 +12,7 @@ class YTSSource(SourceAdapter):
     priority = 2
 
     def search(self, query: str, intent: SearchIntent, limit: int, page: int, http_client: HTTPClient) -> list[SearchResult]:
-        url = "https://yts.mx/api/v2/list_movies.json?" + urllib.parse.urlencode(
+        url = "https://yts.bz/api/v2/list_movies.json?" + urllib.parse.urlencode(
             {"query_term": query, "limit": max(limit * 3, 20), "sort_by": "seeds"}
         )
         payload = http_client.get_json(url)

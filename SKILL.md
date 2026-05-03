@@ -1,6 +1,6 @@
 ---
 name: quarry
-version: 1.0.0
+version: 1.1.0
 description: >-
   Use when finding public download routes for movies, TV, anime, music,
   software, or books. Searches pan/torrent/book sources with quality-aware
@@ -20,7 +20,7 @@ metadata:
 
 ## Overview
 
-Public resource discovery engine for AI agents. Finds the best download routes across 15 sources (cloud drives, torrents, ebooks), ranks by quality, verifies link liveness, and returns structured JSON. Operates on public data only — no login, no DRM bypass.
+Public resource discovery engine for AI agents. Finds the best download routes across 21 sources (cloud drives, torrents, ebooks), ranks by quality, verifies link liveness, and returns structured JSON. Operates on public data only — no login, no DRM bypass.
 
 ## When to Use
 
@@ -111,12 +111,12 @@ Follow this exact order for every resource search request:
 
 | Category | Primary → Fallback | Key Signal |
 |:---------|:-------------------|:-----------|
-| Movie | Pan → YTS/TPB → 1337x | Year in query |
-| TV | EZTV/TPB → Pan | S{XX}E{XX} |
-| Anime | Nyaa → Pan | Romanized title |
-| Book | **Anna's Archive** → Pan → 1337x | Format (epub/pdf) |
-| Music | Pan → Torrent (noise-filtered) | Lossless tags (FLAC) |
-| Software | Pan → FitGirl/TorrentMac | Platform hint |
+| Movie | Pan → YTS/TorrentGalaxy/TPB → 1337x | Year in query |
+| TV | EZTV/TorrentGalaxy/TPB → Pan | S{XX}E{XX} |
+| Anime | Nyaa/DMHY/Bangumi Moe → Pan | Romanized title |
+| Book | **Anna's Archive** → Pan → 1337x/TorLock | Format (epub/pdf) |
+| Music | Pan → DMHY/Nyaa (noise-filtered) | Lossless tags (FLAC) |
+| Software | Pan → FitGirl/TorrentMac/TorrentGalaxy | Platform hint |
 | Video URL | Skip search → `video probe` | URL pattern |
 
 ## Output Format

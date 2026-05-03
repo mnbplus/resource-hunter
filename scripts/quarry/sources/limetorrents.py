@@ -26,12 +26,16 @@ class LimeTorrentsSource(SourceAdapter):
     def search(self, query: str, intent: SearchIntent, limit: int, page: int, http_client: HTTPClient) -> list[SearchResult]:
         encoded = urllib.parse.quote(query)
         payload: str | None = None
+        last_err = ""
         for mirror in self.MIRRORS:
             url = f"https://{mirror}/searchrss/{encoded}/"
             try:
                 payload = http_client.get_text(url)
-                break
-            except Exception:
+                if payload and "<?xml" in payload[:100]:
+                    break  # Valid XML response
+                payload = None  # HTML error page, try next mirror
+            except Exception as exc:
+                last_err = str(exc)
                 continue
         if not payload:
             return []
@@ -55,7 +59,7 @@ class LimeTorrentsSource(SourceAdapter):
             if not info_hash:
                 continue
 
-            magnet = _make_magnet(info_hash)
+            magnet = _make_magnet(info_hash, title)
 
             # Parse seeders from description like "Seeds: 39 , Leechers 17"
             desc = item.findtext("description", "")
@@ -84,10 +88,10 @@ class LimeTorrentsSource(SourceAdapter):
         return results
 
 
-def _format_bytes(n: int) -> str:
+def _format_bytes(n: int | float) -> str:
     """Convert bytes to human-readable size string."""
     for unit in ("B", "KB", "MB", "GB", "TB"):
         if n < 1024:
-            return f"{n:.1f} {unit}" if unit != "B" else f"{n} B"
+            return f"{n:.1f} {unit}" if unit != "B" else f"{int(n)} B"
         n /= 1024
     return f"{n:.1f} PB"

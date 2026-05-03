@@ -37,7 +37,7 @@ def _fetch(url: str, *, data: bytes | None = None, content_type: str | None = No
         headers["Content-Type"] = content_type
     req = urllib.request.Request(url, data=data, headers=headers)
     with urllib.request.urlopen(req, timeout=20) as resp:
-        return resp.read().decode("utf-8", errors="replace")
+        return str(resp.read().decode("utf-8", errors="replace"))
 
 
 # Show link on search page: /d/{show_id}

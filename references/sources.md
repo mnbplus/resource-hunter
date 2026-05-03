@@ -8,6 +8,12 @@
   - Role: primary pan aggregator (UP云搜, high volume, free)
   - Auth: none (uses AES-encrypted API, requires `pycryptodome`)
   - Supports: 夸克/阿里/百度/迅雷/UC/蓝奏/天翼
+- `pansou`
+  - Channel: `pan`
+  - Priority: `1`
+  - Role: self-hosted pan aggregation API (13+ cloud providers)
+  - Auth: `PANSOU_API_URL` (required), `PANSOU_API_TOKEN` (optional)
+  - Supports: 夸克/阿里/百度/115/PikPak/天翼/UC/迅雷/123 + magnet/ed2k
 - `ps.252035`
   - Channel: `pan`
   - Priority: `1`
@@ -18,14 +24,9 @@
   - Priority: `2`
   - Role: secondary pan aggregator
   - Auth: `PANSOU_TOKEN` (optional, improves results)
-- `hunhepan`
-  - Channel: `pan`
-  - Priority: `3`
-  - Role: fallback pan source
-  - Auth: `HUNHEPAN_TOKEN` (required)
-  - Note: default_degraded due to historical instability
 
 ## Torrent sources
+
 - `torznab`
   - Channel: `torrent`
   - Priority: `1`
@@ -33,21 +34,45 @@
   - Auth: `TORZNAB_URL` and `TORZNAB_APIKEY`
   - API: Standard Torznab XML feed
   - Best for: Unlocking 500+ trackers (like 1337x, RARBG clones, TorrentGalaxy, Rutracker) and bypassing Cloudflare natively.
-- `bitsearch`
-  - Channel: `torrent`
-  - Priority: `2`
-  - Role: High-speed, high-availability native magnet indexer (formerly SolidTorrents)
-  - API: HTML scraper
 - `nyaa`
   - Channel: `torrent`
   - Priority: `1`
   - Best for anime
   - API: RSS/XML feed
+- `dmhy`
+  - Channel: `torrent`
+  - Priority: `1`
+  - Best for: Chinese anime community (動漫花園)
+  - API: RSS/XML feed
+  - Supported kinds: anime, music, general
+- `bangumi_moe`
+  - Channel: `torrent`
+  - Priority: `1`
+  - Best for: Anime torrents (Bangumi Moe)
+  - API: JSON REST
+  - Supported kinds: anime, general
+- `subsplease`
+  - Channel: `torrent`
+  - Priority: `1`
+  - Best for: Anime fansub releases (SubsPlease)
+  - API: JSON REST
+  - Supported kinds: anime
 - `eztv`
   - Channel: `torrent`
   - Priority: `1`
   - Best for TV episodes
   - API: JSON REST
+- `torrentgalaxy`
+  - Channel: `torrent`
+  - Priority: `2`
+  - Best for: General-purpose tracker (RARBG replacement), movies, TV, games, software, music
+  - API: HTML scraper with mirror failover
+  - Note: Category-aware search (maps intent kind to TorrentGalaxy categories)
+- `bitsearch`
+  - Channel: `torrent`
+  - Priority: `2`
+  - Role: High-speed, high-availability native magnet indexer (formerly SolidTorrents)
+  - API: HTML scraper
 - `tpb`
   - Channel: `torrent`
   - Priority: `2`
@@ -68,6 +93,12 @@
   - Priority: `3`
   - General supplementary source
   - API: RSS/XML feed with mirror failover
+  - Note: default_degraded
+- `torlock`
+  - Channel: `torrent`
+  - Priority: `3`
+  - Best for: Verified torrent index with seeders/leechers
+  - API: HTML scraper
 - `fitgirl`
   - Channel: `torrent`
   - Priority: `3`
@@ -78,26 +109,36 @@
   - Priority: `3`
   - Best for: Mac software and games
   - API: HTML scraper with concurrent detail-page extraction
+- `ext_to`
+  - Channel: `torrent`
+  - Priority: `3`
+  - Best for: Modern magnet search engine
+  - API: HTML scraper
+  - Note: default_degraded
+
+## Book sources
+
 - `annas`
   - Channel: `torrent`
   - Priority: `2`
   - Best for: Books and ebooks (PDF, EPUB, MOBI)
   - API: HTML scraper on Anna's Archive search
-  - Note: Protected by DDoS-Guard; benefits from `curl_cffi` for TLS impersonation
+  - Note: Protected by DDoS-Guard; benefits from `curl_cffi` for TLS impersonation; default_degraded
 
 ## Default routing matrix
 
-- Movie: `upyunso -> ps.252035 -> panhunt -> hunhepan`, then `yts -> tpb -> 1337x -> limetorrents`
-- TV: `eztv -> tpb -> 1337x -> limetorrents`, then pan sources
-- Anime: `nyaa -> tpb -> 1337x -> limetorrents`, then pan sources
-- Book: `annas -> torznab -> bitsearch -> 1337x`, then pan sources
-- Music/software/general: pan sources first, torrent sources second
-- Public video URL: no pan/torrent search; route directly to video workflow
+- Movie: `upyunso -> pansou -> ps.252035 -> panhunt`, then `yts -> torrentgalaxy -> bitsearch -> tpb -> 1337x -> limetorrents -> torlock -> ext_to`
+- TV: `eztv -> torrentgalaxy -> bitsearch -> tpb -> 1337x -> limetorrents -> torlock -> ext_to`, then pan sources
+- Anime: `nyaa -> dmhy -> bangumi_moe -> bitsearch -> torrentgalaxy -> tpb -> 1337x -> limetorrents -> torlock -> ext_to`, then pan sources
+- Book: `annas -> torznab -> bitsearch -> 1337x -> limetorrents -> torrentgalaxy -> torlock -> ext_to -> tpb`, then pan sources
+- Music: pan sources first, then `nyaa -> dmhy -> bitsearch -> 1337x -> torrentgalaxy -> ext_to` (noise-filtered, no tpb)
+- Software: pan sources first, then `torrentmac -> fitgirl -> torrentgalaxy -> bitsearch -> tpb -> 1337x -> limetorrents -> torlock -> ext_to`
+- General: pan sources first, all torrent sources
 
 ## Capability profile notes
 
 - Every source has a fixed timeout, retry count, query budget, and cooldown threshold
-- Default-degraded sources require repeated success evidence before they are treated as healthy again
+- Default-degraded sources (limetorrents, annas, ext_to) require repeated success evidence before they are treated as healthy again
 
 ## Health and circuit breaking
 
@@ -111,7 +152,8 @@
 | Variable | Used by | Required |
 |----------|---------|----------|
 | `PANSOU_TOKEN` | ps.252035, panhunt | Yes (ps.252035), Optional (panhunt) |
-| `HUNHEPAN_TOKEN` | hunhepan | Yes |
+| `PANSOU_API_URL` | pansou | Yes (when using pansou) |
+| `PANSOU_API_TOKEN` | pansou | Optional (only if AUTH_ENABLED=true) |
 | `TORZNAB_URL` | torznab | Yes (when using torznab) |
 | `TORZNAB_APIKEY` | torznab | Yes (when using torznab) |
 | `HTTP_PROXY` / `HTTPS_PROXY` | HTTPClient | Optional (needed for CN servers) |
@@ -119,10 +161,18 @@
 ## Pan link viability probing
 
 - Pan search results (`top` / `related` tier) are automatically probed for link viability
-- Supported providers: Aliyun (阿里云盘), Quark (夸克网盘), Baidu (百度网盘)
+- Supported providers (7):
+  - **Aliyun (阿里云盘)** — anonymous share API
+  - **Quark (夸克网盘)** — share token API
+  - **Baidu (百度网盘)** — share page dead-signal detection
+  - **Lanzou (蓝奏云)** — share page dead-signal detection (all domain variants)
+  - **Tianyi (天翼云盘)** — share info API
+  - **115 (115网盘)** — page-level status detection (conservative due to anti-bot)
+  - **PikPak** — share info API
 - Dead links are demoted to `risky` tier with penalty `dead link detected`
 - Probe results are available in `source_health.link_alive` (true/false/null)
 - Use `--no-probe` to skip probing for faster results
+- All probes are zero-login: no cookies, tokens, or accounts required
 
 ## Anti-bot: curl_cffi
 
@@ -135,4 +185,4 @@
 
 - External public sources may throttle, change formats, or break without notice
 - Coverage quality varies by query and source index freshness
-- hunhepan is default_degraded and requires token; without it, effectively only 2 pan sources are active
+- pansou requires `PANSOU_API_URL` to be set; without it, the source silently returns empty results

@@ -15,7 +15,7 @@ def test_pan_dedup_prefers_result_with_password():
     )
     second = SearchResult(
         channel="pan",
-        source="hunhepan",
+        source="pansou",
         provider="aliyun",
         title="Movie A mirror",
         link_or_magnet="https://example.com/share/abc?pwd=1234",
@@ -41,4 +41,4 @@ def test_torrent_score_rewards_match_quality_and_seeders():
     scored = score_result(result, intent)
     assert scored.score > 80
     assert "4k requested" in scored.reasons
-    assert "seeders" in scored.reasons
+    assert any(r.startswith("seeders") for r in scored.reasons)

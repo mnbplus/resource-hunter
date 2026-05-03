@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 import time
 from typing import Any
@@ -412,8 +413,10 @@ def score_result(result: SearchResult, intent: SearchIntent, cache: ResourceCach
             score += cfg.pan_password_bonus
             result.reasons.append("has extraction code")
     if result.channel == "torrent" and result.seeders:
-        score += min(result.seeders, cfg.seeder_cap) // cfg.seeder_divisor
-        result.reasons.append("seeders")
+        # Log-based seeder scoring: 10→10pts, 100→20pts, 1000→30pts, 10000→40pts
+        seeder_score = int(math.log10(max(result.seeders, 1)) * 10)
+        score += min(seeder_score, cfg.seeder_cap // cfg.seeder_divisor)
+        result.reasons.append(f"seeders ({result.seeders})")
 
     score += max(0, 12 - source_priority(result.source))
     result.reasons.append(f"source priority {source_priority(result.source)}")
@@ -494,20 +497,25 @@ def sort_results(results: list[SearchResult]) -> list[SearchResult]:
 
 
 def diversify_results(results: list[SearchResult], head_size: int = 8) -> list[SearchResult]:
-    remaining = list(sort_results(results))
+    sorted_all = sort_results(results)
+    if len(sorted_all) <= head_size:
+        # Small result set — no diversity needed, just sort
+        return sorted_all
+
+    # Apply diversity penalties only to the first `head_size` picks
+    remaining = list(sorted_all)
     selected: list[SearchResult] = []
     source_counts: dict[str, int] = {}
     provider_counts: dict[str, int] = {}
     quality_counts: dict[str, int] = {}
-    while remaining:
+    while remaining and len(selected) < head_size:
         best_index = 0
         best_value: tuple[float, int] | None = None
         for index, item in enumerate(remaining):
             adjusted = float(item.score)
-            if len(selected) < head_size:
-                adjusted -= source_counts.get(item.source, 0) * 12
-                adjusted -= provider_counts.get(item.provider, 0) * 6
-                adjusted -= quality_counts.get(item.quality or "na", 0) * 4
+            adjusted -= source_counts.get(item.source, 0) * 12
+            adjusted -= provider_counts.get(item.provider, 0) * 6
+            adjusted -= quality_counts.get(item.quality or "na", 0) * 4
             value = (adjusted, -index)
             if best_value is None or value > best_value:
                 best_value = value
@@ -517,6 +525,9 @@ def diversify_results(results: list[SearchResult], head_size: int = 8) -> list[S
         source_counts[chosen.source] = source_counts.get(chosen.source, 0) + 1
         provider_counts[chosen.provider] = provider_counts.get(chosen.provider, 0) + 1
         quality_counts[chosen.quality or "na"] = quality_counts.get(chosen.quality or "na", 0) + 1
+
+    # Append tail in pre-sorted order (no diversity penalty — already ranked)
+    selected.extend(remaining)
     return selected
 
 

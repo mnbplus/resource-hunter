@@ -26,7 +26,12 @@ from ..common import (
 )
 from ..models import SearchIntent, SearchResult
 
-_BASE = "https://annas-archive.org"
+_MIRRORS = [
+    "annas-archive.org",
+    "annas-archive.se",
+    "annas-archive.li",
+    "annas-archive.gs",
+]
 
 
 # Each result is a large <a> block linking to /md5/{hash}
@@ -67,6 +72,7 @@ def _clean_text(text: str) -> str:
 
 
 def _build_search_url(
+    base: str,
     query: str,
     ext: str = "",
     lang: str = "",
@@ -80,7 +86,7 @@ def _build_search_url(
         params["lang"] = lang
     if content:
         params["content"] = content
-    return f"{_BASE}/search?{urllib.parse.urlencode(params)}"
+    return f"{base}/search?{urllib.parse.urlencode(params)}"
 
 
 class AnnasArchiveSource(SourceAdapter):
@@ -113,18 +119,16 @@ class AnnasArchiveSource(SourceAdapter):
         if any(h in query_lower for h in fiction_hints):
             content = "book_fiction"
 
-        url = _build_search_url(query, ext=ext, content=content)
-
-        try:
-            html = http_client.get_text(url, timeout=15)
-        except Exception:
-            # Retry without filters (DDoS-Guard may block with certain params)
+        for base in [f"https://{m}" for m in _MIRRORS]:
+            url = _build_search_url(base, query, ext=ext, content=content)
             try:
-                html = http_client.get_text(_build_search_url(query), timeout=15)
+                html = http_client.get_text(url, timeout=15)
+                if html and len(html) > 500:
+                    return self._parse_results(html, limit)
             except Exception:
-                return []
+                continue
 
-        return self._parse_results(html, limit)
+        return []
 
     def _parse_results(self, html: str, limit: int) -> list[SearchResult]:
         """Parse search result page HTML."""
@@ -198,7 +202,7 @@ class AnnasArchiveSource(SourceAdapter):
         if file_format:
             display_title = f"{display_title} [{file_format.upper()}]"
 
-        detail_url = f"{_BASE}{detail_path}"
+        detail_url = f"https://{_MIRRORS[0]}{detail_path}"
         md5 = detail_path.split("/")[-1].lower()
 
         quality_tags = parse_quality_tags(display_title)
@@ -263,13 +267,13 @@ class AnnasArchiveSource(SourceAdapter):
             upstream_source=self.name,
             provider="annas_archive",
             title=display_title,
-            link_or_magnet=f"{_BASE}{detail_path}",
+            link_or_magnet=f"https://{_MIRRORS[0]}{detail_path}",
             share_id_or_info_hash=md5,
             size=size,
             quality=quality_display_from_tags(quality_tags),
             quality_tags=quality_tags,
             raw={
                 "format": file_format,
-                "detail_url": f"{_BASE}{detail_path}",
+                "detail_url": f"https://{_MIRRORS[0]}{detail_path}",
             },
         )

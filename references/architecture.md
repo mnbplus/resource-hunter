@@ -19,27 +19,41 @@
 - `scripts/quarry/video_core.py`: yt-dlp workflow and manifest handling
 - `scripts/quarry/cli.py`: unified CLI surface
 - `scripts/quarry/exceptions.py`: custom exception hierarchy
+- `scripts/quarry/_cleanup.py`: deprecated file auto-removal on startup
 
 ## Source adapters (plugin architecture)
 
 ```text
 sources/
-  __init__.py       # SourceRegistry, default_adapters()
-  base.py           # SourceAdapter, HTTPClient, BrowserClient, SourceRuntimeProfile, helpers
-  upyunso.py        # UP云搜 pan aggregator (requires pycryptodome)
-  ps252035.py       # ps.252035.xyz pan search (requires PANSOU_TOKEN)
-  panhunt.py        # s.panhunt.com pan search (optional PANSOU_TOKEN)
-  hunhepan.py       # Hunhepan pan aggregator (requires HUNHEPAN_TOKEN)
-  torznab.py        # Torznab meta-indexer (Jackett / Prowlarr)
-  nyaa.py           # Nyaa.si anime/general torrent (RSS)
-  eztv.py           # EZTV TV torrent (JSON API)
-  bitsearch.py      # Bitsearch magnet indexer (HTML scraper)
-  tpb.py            # ThePirateBay (apibay) torrent (JSON API)
-  yts.py            # YTS movie torrent (JSON API)
-  x1337.py          # 1337x torrent (HTML scraper with mirror failover)
-  limetorrents.py   # LimeTorrents (RSS/XML feed with mirror failover)
-  fitgirl.py        # FitGirl Repacks (RSS/XML feed)
-  torrentmac.py     # TorrentMac (HTML scraper with concurrent detail-page extraction)
+  __init__.py         # SourceRegistry, default_adapters()
+  base.py             # SourceAdapter, HTTPClient, BrowserClient, SourceRuntimeProfile, helpers
+
+  # Pan sources (cloud drive aggregators)
+  upyunso.py          # UP云搜 pan aggregator (requires pycryptodome)
+  pansou.py           # PanSou self-hosted pan aggregation API (PANSOU_API_URL + PANSOU_API_TOKEN)
+  ps252035.py         # ps.252035.xyz pan search (requires PANSOU_TOKEN)
+  panhunt.py          # s.panhunt.com pan search (optional PANSOU_TOKEN)
+
+  # Torrent sources
+  torznab.py          # Torznab meta-indexer (Jackett / Prowlarr)
+  nyaa.py             # Nyaa.si anime/general torrent (RSS)
+  dmhy.py             # 動漫花園 Chinese anime community tracker (RSS)
+  bangumi_moe.py      # Bangumi Moe anime torrent (JSON API)
+  eztv.py             # EZTV TV torrent (JSON API)
+  torrentgalaxy.py    # TorrentGalaxy general tracker, RARBG replacement (HTML scraper with mirror failover)
+  bitsearch.py        # Bitsearch magnet indexer (HTML scraper)
+  tpb.py              # ThePirateBay (apibay) torrent (JSON API)
+  yts.py              # YTS movie torrent (JSON API)
+  x1337.py            # 1337x torrent (HTML scraper with mirror failover)
+  limetorrents.py     # LimeTorrents (RSS/XML feed with mirror failover)
+  torlock.py          # TorLock verified torrent index (HTML scraper)
+  fitgirl.py          # FitGirl Repacks (RSS/XML feed)
+  torrentmac.py       # TorrentMac (HTML scraper with concurrent detail-page extraction)
+  ext_to.py           # EXT.to modern magnet search engine (HTML scraper)
+  subsplease.py       # SubsPlease anime fansub group tracker (JSON API)
+
+  # Book sources
+  annas.py            # Anna's Archive ebook search (HTML scraper, DDoS-Guard protected)
 ```
 
 ## Search flow

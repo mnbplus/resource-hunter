@@ -38,7 +38,7 @@ def _fetch(url: str) -> str:
     """Fetch URL and return response body as text."""
     req = urllib.request.Request(url, headers=_DEFAULT_HEADERS)
     with urllib.request.urlopen(req, timeout=20) as resp:
-        return resp.read().decode("utf-8", errors="replace")
+        return str(resp.read().decode("utf-8", errors="replace"))
 
 
 # Entry link: /entry/{id} with text = anime name
@@ -156,7 +156,7 @@ class JimakuClient:
         entries = list(_ENTRY_LINK_RE.finditer(html))
 
         best_match: dict[str, Any] | None = None
-        best_score = 0
+        best_score: float = 0.0
 
         for m in entries:
             entry_id = int(m.group(1))

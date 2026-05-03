@@ -176,7 +176,7 @@ BOOK_TERMS = (
 def ensure_utf8_stdio() -> None:
     for handle_name in ("stdout", "stderr"):
         handle = getattr(sys, handle_name, None)
-        if hasattr(handle, "reconfigure"):
+        if handle is not None and hasattr(handle, "reconfigure"):
             handle.reconfigure(encoding="utf-8", errors="replace")
 
 
@@ -205,20 +205,27 @@ def safe_filename(name: str) -> str:
 def source_priority(source_name: str) -> int:
     priorities = {
         "upyunso": 1,
+        "pansou": 1,
         "ps.252035": 1,
         "torznab": 1,
         "panhunt": 2,
-        "hunhepan": 3,
+
         "nyaa": 1,
+        "dmhy": 1,
+        "bangumi_moe": 1,
         "eztv": 1,
+        "torrentgalaxy": 2,
         "bitsearch": 2,
         "tpb": 2,
         "yts": 2,
         "1337x": 3,
         "limetorrents": 3,
+        "torlock": 3,
         "fitgirl": 3,
         "torrentmac": 3,
+        "ext_to": 3,
         "annas": 2,
+        "subsplease": 1,
     }
     return priorities.get((source_name or "").lower(), 9)
 

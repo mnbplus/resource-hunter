@@ -97,10 +97,10 @@ class TorznabSource(SourceAdapter):
         return results
 
 
-def _format_bytes(n: int) -> str:
+def _format_bytes(n: int | float) -> str:
     """Convert bytes to human-readable size string."""
     for unit in ("B", "KB", "MB", "GB", "TB"):
         if n < 1024:
-            return f"{n:.1f} {unit}" if unit != "B" else f"{n} B"
+            return f"{n:.1f} {unit}" if unit != "B" else f"{int(n)} B"
         n /= 1024
     return f"{n:.1f} PB"

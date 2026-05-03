@@ -96,7 +96,8 @@ def _build_signed_params(params: dict) -> dict:
 def _decrypt_response(resp: dict | list) -> dict | list:
     """If *resp* is an encrypted envelope, decrypt and parse it."""
     if isinstance(resp, dict) and resp.get("__encrypted") and resp.get("data"):
-        return json.loads(_aes_decrypt(resp["data"]))
+        parsed: dict | list = json.loads(_aes_decrypt(resp["data"]))
+        return parsed
     return resp
 
 
@@ -337,5 +338,5 @@ def _resolve_link(rid: str, token: str, http_client: HTTPClient) -> str:
         real_url = resp.get("result", {}).get("real_url", "")
         if real_url:
             logger.debug("upyunso resolved rid=%s → %s", rid, real_url[:80])
-            return real_url
+            return str(real_url)
     return ""

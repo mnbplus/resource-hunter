@@ -35,7 +35,6 @@ from .base import (
 )
 
 # Import all concrete adapters — they self-register via SourceRegistry
-from .hunhepan import HunhepanSource
 from .ps252035 import Ps252035Source
 from .panhunt import PanhuntSource
 from .upyunso import UpyunsoSource
@@ -50,6 +49,13 @@ from .torznab import TorznabSource
 from .bitsearch import BitsearchSource
 from .torrentmac import TorrentMacSource
 from .annas import AnnasArchiveSource
+from .pansou import PanSouSource
+from .dmhy import DMHYSource
+from .bangumi_moe import BangumiMoeSource
+from .torrentgalaxy import TorrentGalaxySource
+from .torlock import TorLockSource
+from .ext_to import ExtToSource
+from .subsplease import SubsPleaseSource
 
 
 class SourceRegistry:
@@ -77,11 +83,11 @@ class SourceRegistry:
         import logging
         _logger = logging.getLogger(__name__)
         if _HAS_CRYPTO:
-            self._pan = [UpyunsoSource(), Ps252035Source(), PanhuntSource(), HunhepanSource()]
+            self._pan = [UpyunsoSource(), PanSouSource(), Ps252035Source(), PanhuntSource()]
         else:
             _logger.warning("upyunso disabled: pycryptodome / pycryptodomex not installed (pip install pycryptodome)")
-            self._pan = [Ps252035Source(), PanhuntSource(), HunhepanSource()]
-        self._torrent = [TorznabSource(), NyaaSource(), EZTVSource(), BitsearchSource(), TPBSource(), YTSSource(), OneThreeThreeSevenXSource(), LimeTorrentsSource(), FitGirlSource(), TorrentMacSource(), AnnasArchiveSource()]
+            self._pan = [PanSouSource(), Ps252035Source(), PanhuntSource()]
+        self._torrent = [TorznabSource(), NyaaSource(), DMHYSource(), BangumiMoeSource(), SubsPleaseSource(), EZTVSource(), TorrentGalaxySource(), BitsearchSource(), TPBSource(), YTSSource(), OneThreeThreeSevenXSource(), LimeTorrentsSource(), TorLockSource(), FitGirlSource(), TorrentMacSource(), ExtToSource(), AnnasArchiveSource()]
 
     def _load_local_sources(self) -> None:
         """Auto-discover custom source adapters from ``local/sources/``."""
@@ -146,23 +152,29 @@ def default_adapters() -> tuple[list[SourceAdapter], list[SourceAdapter]]:
 
 __all__ = [
     "AnnasArchiveSource",
+    "BangumiMoeSource",
     "BitsearchSource",
     "DEFAULT_HEADERS",
+    "DMHYSource",
     "EZTVSource",
+    "ExtToSource",
     "FitGirlSource",
     "HTTPClient",
-    "HunhepanSource",
     "LimeTorrentsSource",
     "NyaaSource",
     "OneThreeThreeSevenXSource",
+    "PanSouSource",
     "PanhuntSource",
     "Ps252035Source",
     "SOURCE_RUNTIME_PROFILES",
     "SourceAdapter",
     "SourceRegistry",
     "SourceRuntimeProfile",
+    "SubsPleaseSource",
     "TPBSource",
     "TRACKERS",
+    "TorLockSource",
+    "TorrentGalaxySource",
     "TorznabSource",
     "TorrentMacSource",
     "UpyunsoSource",

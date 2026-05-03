@@ -78,7 +78,8 @@ class VideoManager:
         result = self._run_ytdlp(["-J", "--no-playlist", url], capture=True, timeout=120)
         if result.returncode != 0:
             raise RuntimeError((result.stderr or result.stdout or "yt-dlp failed").strip()[:240])
-        return json.loads(result.stdout)
+        info: dict[str, Any] = json.loads(result.stdout)
+        return info
 
     def _format_entries(self, data: dict[str, Any]) -> list[dict[str, Any]]:
         formats: list[dict[str, Any]] = []
@@ -218,7 +219,7 @@ class VideoManager:
             platform=detect_platform(url),
             title=artifact_paths[0].name if artifact_paths else "",
             artifacts=artifacts,
-            meta=payload["meta"] | {"task_id": task_id},
+            meta={**dict(payload.get("meta", {})), "task_id": task_id},  # type: ignore[arg-type]
         )
 
     def subtitle(self, url: str, lang: str = "zh-Hans,zh,en") -> VideoResult:

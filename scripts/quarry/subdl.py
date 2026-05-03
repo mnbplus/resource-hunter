@@ -116,7 +116,7 @@ def _fetch(url: str, *, timeout: int = 12) -> str:
     """Fetch a URL and return decoded text."""
     req = urllib.request.Request(url, headers=_DEFAULT_HEADERS)
     with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read().decode("utf-8", errors="replace")
+        return str(resp.read().decode("utf-8", errors="replace"))
 
 
 class SubDLClient:

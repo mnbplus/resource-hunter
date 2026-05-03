@@ -150,7 +150,7 @@ def _music_cases(artist: str, work: str, bad: str, offset: int) -> list[SearchBe
             query=f"{artist} {work} flac",
             kind="music",
             expected_title=exact,
-            candidates=[_pan(exact, "quark", f"mu{base}4", source="hunhepan"), _pan(f"{artist} - {work} MP3", "aliyun", f"mu{base}5")],
+            candidates=[_pan(exact, "quark", f"mu{base}4", source="pansou"), _pan(f"{artist} - {work} MP3", "aliyun", f"mu{base}5")],
         ),
         SearchBenchmarkCase(
             query=f"{artist} soundtrack",
@@ -182,7 +182,7 @@ def _software_cases(name: str, version: str, bad: str, offset: int) -> list[Sear
             query=f"{name} installer",
             kind="software",
             expected_title=exact,
-            candidates=[_pan(exact, "baidu", f"sw{base}5", source="hunhepan"), _pan(f"{bad} {version} Windows x64", "aliyun", f"sw{base}6")],
+            candidates=[_pan(exact, "baidu", f"sw{base}5", source="pansou"), _pan(f"{bad} {version} Windows x64", "aliyun", f"sw{base}6")],
             adversarial=True,
         ),
     ]
@@ -203,7 +203,7 @@ def _book_cases(name: str, alt: str, fmt: str, offset: int) -> list[SearchBenchm
             query=f"{name} ebook",
             kind="book",
             expected_title=exact,
-            candidates=[_pan(exact, "quark", f"bk{base}3", source="hunhepan"), _pan(f"{alt} pdf", "aliyun", f"bk{base}4")],
+            candidates=[_pan(exact, "quark", f"bk{base}3", source="pansou"), _pan(f"{alt} pdf", "aliyun", f"bk{base}4")],
         ),
         SearchBenchmarkCase(
             query=f"{name} pdf",
@@ -216,102 +216,95 @@ def _book_cases(name: str, alt: str, fmt: str, offset: int) -> list[SearchBenchm
 
 def _search_cases() -> list[SearchBenchmarkCase]:
     cases: list[SearchBenchmarkCase] = []
-    for index, seed in enumerate(
-        [
-            ("Oppenheimer", "2023", "Interstellar", "Open Hearts"),
-            ("Dune Part Two", "2024", "Arrival", "Dune Drift"),
-            ("The Matrix", "1999", "The Thirteenth Floor", "Matrixed"),
-            ("Blade Runner", "1982", "Tron", "Blade Nation"),
-            ("Spirited Away", "2001", "Howls Moving Castle", "Spirits Bay"),
-            ("Inception", "2010", "Tenet", "Insurrection"),
-            ("Parasite", "2019", "Memories of Murder", "Parallel Site"),
-            ("Mad Max Fury Road", "2015", "Furiosa", "Mad World"),
-            ("The Dark Knight", "2008", "Batman Begins", "The Night Watch"),
-            ("Whiplash", "2014", "La La Land", "Wind Clash"),
-        ],
-        start=1,
-    ):
-        cases.extend(_movie_cases(*seed, offset=index))
-    for index, seed in enumerate(
-        [
-            ("Breaking Bad", 1, 1, "The Bad Guys Breaking In"),
-            ("Severance", 2, 1, "Server Room"),
-            ("The Bear", 2, 10, "Bearly Legal"),
-            ("Dark", 1, 1, "Dark Matter"),
-            ("Shogun", 1, 2, "Shotgun Wedding"),
-            ("Andor", 1, 3, "Android Files"),
-            ("Succession", 1, 1, "Successful People"),
-            ("The Last of Us", 1, 5, "The Last Bus"),
-            ("Silo", 1, 2, "Solo"),
-            ("Mr Robot", 1, 1, "My Robot"),
-        ],
-        start=1,
-    ):
-        cases.extend(_episode_cases("tv", *seed, offset=index))
-    for index, seed in enumerate(
-        [
-            ("Attack on Titan", 1, 1, "Titan Attackers"),
-            ("Frieren", 1, 1, "Frozen End"),
-            ("Demon Slayer", 1, 1, "Slayer Demo"),
-            ("One Piece", 1, 1, "Single Piece"),
-            ("Naruto", 1, 1, "Narrow Route"),
-            ("Jujutsu Kaisen", 1, 1, "Jungle Kaisen"),
-            ("Bleach", 1, 1, "Beach"),
-            ("Mob Psycho 100", 1, 1, "Mob City"),
-            ("Steins Gate", 1, 1, "Stone Gate"),
-            ("Cowboy Bebop", 1, 1, "Cowboy Rehab"),
-        ],
-        start=1,
-    ):
-        cases.extend(_episode_cases("anime", *seed, offset=index))
-    for index, seed in enumerate(
-        [
-            ("Jay Chou", "Fantasy", "Joy Ride"),
-            ("Taylor Swift", "Red", "Red Sun"),
-            ("Hans Zimmer", "Interstellar OST", "Interior Lines"),
-            ("Aimer", "Brave Shine", "Brave Signal"),
-            ("Eason Chan", "U87", "U89"),
-            ("Yiruma", "River Flows In You", "River Falls"),
-            ("Joe Hisaishi", "Spirited Away OST", "Spiral Drift"),
-            ("Daft Punk", "Random Access Memories", "Random Memory"),
-            ("Kenshi Yonezu", "Lemon", "Melon"),
-            ("Hikaru Utada", "First Love", "Frost Love"),
-        ],
-        start=1,
-    ):
-        cases.extend(_music_cases(*seed, offset=index))
-    for index, seed in enumerate(
-        [
-            ("Adobe Photoshop", "2024", "Adobe Illustrator"),
-            ("Visual Studio Code", "1.90", "Visual Studio"),
-            ("PyCharm Professional", "2024", "IntelliJ IDEA"),
-            ("AutoCAD", "2025", "SketchUp"),
-            ("Microsoft Office", "2021", "LibreOffice"),
-            ("Final Cut Pro", "10.8", "Premiere Pro"),
-            ("Ableton Live", "12", "FL Studio"),
-            ("OBS Studio", "30", "Streamlabs"),
-            ("Affinity Photo", "2.5", "Affinity Designer"),
-            ("Blender", "4.1", "Maya"),
-        ],
-        start=1,
-    ):
-        cases.extend(_software_cases(*seed, offset=index))
-    for index, seed in enumerate(
-        [
-            ("Three Body Problem", "Three Kingdoms", "epub"),
-            ("The Pragmatic Programmer", "The Mythical Man-Month", "pdf"),
-            ("Clean Code", "Code Complete", "pdf"),
-            ("Deep Learning", "Pattern Recognition", "pdf"),
-            ("The Hobbit", "The Lord of the Rings", "epub"),
-            ("Harry Potter", "Percy Jackson", "epub"),
-            ("Dune", "Foundation", "epub"),
-            ("The Art of Computer Programming", "Introduction to Algorithms", "pdf"),
-            ("Sapiens", "Homo Deus", "epub"),
-            ("The Name of the Wind", "The Wise Mans Fear", "pdf"),
-        ],
-        start=1,
-    ):
-        cases.extend(_book_cases(*seed, offset=index))
+    _movie_seeds: list[tuple[str, str, str, str]] = [
+        ("Oppenheimer", "2023", "Interstellar", "Open Hearts"),
+        ("Dune Part Two", "2024", "Arrival", "Dune Drift"),
+        ("The Matrix", "1999", "The Thirteenth Floor", "Matrixed"),
+        ("Blade Runner", "1982", "Tron", "Blade Nation"),
+        ("Spirited Away", "2001", "Howls Moving Castle", "Spirits Bay"),
+        ("Inception", "2010", "Tenet", "Insurrection"),
+        ("Parasite", "2019", "Memories of Murder", "Parallel Site"),
+        ("Mad Max Fury Road", "2015", "Furiosa", "Mad World"),
+        ("The Dark Knight", "2008", "Batman Begins", "The Night Watch"),
+        ("Whiplash", "2014", "La La Land", "Wind Clash"),
+    ]
+    for index, (name, year, alt, bad) in enumerate(_movie_seeds, start=1):
+        cases.extend(_movie_cases(name, year, alt, bad, offset=index))
+
+    _tv_seeds: list[tuple[str, int, int, str]] = [
+        ("Breaking Bad", 1, 1, "The Bad Guys Breaking In"),
+        ("Severance", 2, 1, "Server Room"),
+        ("The Bear", 2, 10, "Bearly Legal"),
+        ("Dark", 1, 1, "Dark Matter"),
+        ("Shogun", 1, 2, "Shotgun Wedding"),
+        ("Andor", 1, 3, "Android Files"),
+        ("Succession", 1, 1, "Successful People"),
+        ("The Last of Us", 1, 5, "The Last Bus"),
+        ("Silo", 1, 2, "Solo"),
+        ("Mr Robot", 1, 1, "My Robot"),
+    ]
+    for index, (name, season, episode, bad) in enumerate(_tv_seeds, start=1):
+        cases.extend(_episode_cases("tv", name, season, episode, bad, offset=index))
+
+    _anime_seeds: list[tuple[str, int, int, str]] = [
+        ("Attack on Titan", 1, 1, "Titan Attackers"),
+        ("Frieren", 1, 1, "Frozen End"),
+        ("Demon Slayer", 1, 1, "Slayer Demo"),
+        ("One Piece", 1, 1, "Single Piece"),
+        ("Naruto", 1, 1, "Narrow Route"),
+        ("Jujutsu Kaisen", 1, 1, "Jungle Kaisen"),
+        ("Bleach", 1, 1, "Beach"),
+        ("Mob Psycho 100", 1, 1, "Mob City"),
+        ("Steins Gate", 1, 1, "Stone Gate"),
+        ("Cowboy Bebop", 1, 1, "Cowboy Rehab"),
+    ]
+    for index, (name, season, episode, bad) in enumerate(_anime_seeds, start=1):
+        cases.extend(_episode_cases("anime", name, season, episode, bad, offset=index))
+
+    _music_seeds: list[tuple[str, str, str]] = [
+        ("Jay Chou", "Fantasy", "Joy Ride"),
+        ("Taylor Swift", "Red", "Red Sun"),
+        ("Hans Zimmer", "Interstellar OST", "Interior Lines"),
+        ("Aimer", "Brave Shine", "Brave Signal"),
+        ("Eason Chan", "U87", "U89"),
+        ("Yiruma", "River Flows In You", "River Falls"),
+        ("Joe Hisaishi", "Spirited Away OST", "Spiral Drift"),
+        ("Daft Punk", "Random Access Memories", "Random Memory"),
+        ("Kenshi Yonezu", "Lemon", "Melon"),
+        ("Hikaru Utada", "First Love", "Frost Love"),
+    ]
+    for index, (artist, work, bad) in enumerate(_music_seeds, start=1):
+        cases.extend(_music_cases(artist, work, bad, offset=index))
+
+    _software_seeds: list[tuple[str, str, str]] = [
+        ("Adobe Photoshop", "2024", "Adobe Illustrator"),
+        ("Visual Studio Code", "1.90", "Visual Studio"),
+        ("PyCharm Professional", "2024", "IntelliJ IDEA"),
+        ("AutoCAD", "2025", "SketchUp"),
+        ("Microsoft Office", "2021", "LibreOffice"),
+        ("Final Cut Pro", "10.8", "Premiere Pro"),
+        ("Ableton Live", "12", "FL Studio"),
+        ("OBS Studio", "30", "Streamlabs"),
+        ("Affinity Photo", "2.5", "Affinity Designer"),
+        ("Blender", "4.1", "Maya"),
+    ]
+    for index, (name, version, bad) in enumerate(_software_seeds, start=1):
+        cases.extend(_software_cases(name, version, bad, offset=index))
+
+    _book_seeds: list[tuple[str, str, str]] = [
+        ("Three Body Problem", "Three Kingdoms", "epub"),
+        ("The Pragmatic Programmer", "The Mythical Man-Month", "pdf"),
+        ("Clean Code", "Code Complete", "pdf"),
+        ("Deep Learning", "Pattern Recognition", "pdf"),
+        ("The Hobbit", "The Lord of the Rings", "epub"),
+        ("Harry Potter", "Percy Jackson", "epub"),
+        ("Dune", "Foundation", "epub"),
+        ("The Art of Computer Programming", "Introduction to Algorithms", "pdf"),
+        ("Sapiens", "Homo Deus", "epub"),
+        ("The Name of the Wind", "The Wise Mans Fear", "pdf"),
+    ]
+    for index, (name, alt, fmt) in enumerate(_book_seeds, start=1):
+        cases.extend(_book_cases(name, alt, fmt, offset=index))
     return cases
 
 
@@ -371,8 +364,8 @@ def run_benchmark_suite() -> dict[str, object]:
         adversarial_failures += 1 if result["adversarial_failure"] else 0
 
     video_passes = 0
-    for case in video_cases:
-        if parse_intent(case.url).kind == "video" and detect_platform(case.url) == case.expected_platform:
+    for vcase in video_cases:
+        if parse_intent(vcase.url).kind == "video" and detect_platform(vcase.url) == vcase.expected_platform:
             video_passes += 1
 
     by_kind_rates = {

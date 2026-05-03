@@ -4,6 +4,10 @@ Supported providers:
   - **Aliyun (阿里云盘)**: anonymous share API → alive / cancelled / not-found
   - **Quark (夸克网盘)**: share token API → alive / expired
   - **Baidu (百度网盘)**: share init page → alive / expired / removed
+  - **Lanzou (蓝奏云)**: share page dead-signal detection → alive / removed
+  - **Tianyi (天翼云盘)**: share info API → alive / expired / not-found
+  - **115 (115网盘)**: share page status detection → alive / expired
+  - **PikPak**: share info API → alive / not-found
 
 Each probe is designed to complete in ≤ 3 seconds.  Unsupported providers
 return ``alive=None`` (unknown) so they are never falsely penalized.
@@ -41,14 +45,15 @@ def _post_json(url: str, body: dict[str, Any], *, timeout: int = _PROBE_TIMEOUT)
     headers = {**_DEFAULT_HEADERS, "Content-Type": "application/json"}
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode("utf-8", errors="replace"))
+        result: dict[str, Any] = json.loads(resp.read().decode("utf-8", errors="replace"))
+        return result
 
 
 def _get_text(url: str, *, timeout: int = _PROBE_TIMEOUT) -> str:
     """GET a URL and return response body as text."""
     req = urllib.request.Request(url, headers=_DEFAULT_HEADERS)
     with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read().decode("utf-8", errors="replace")
+        return str(resp.read().decode("utf-8", errors="replace"))
 
 
 _ALIYUN_SHARE_RE = re.compile(r"(?:aliyundrive|alipan)\.com/s/([A-Za-z0-9]+)")
@@ -170,10 +175,202 @@ def _probe_baidu(url: str) -> ProbeResult:
     return ProbeResult(alive=None, reason="ambiguous page", title="")
 
 
+# ---------------------------------------------------------------------------
+# Lanzou (蓝奏云) — page-level dead-signal detection, zero login
+# Domains: lanzou.com, lanzoux.com, lanzouq.com, lanzoui.com, lanzout.com, etc.
+# ---------------------------------------------------------------------------
+
+_LANZOU_SHARE_RE = re.compile(r"(lanzou[a-z]*\.com)/([A-Za-z0-9_-]+)")
+
+def _extract_lanzou_url(url: str) -> str:
+    m = _LANZOU_SHARE_RE.search(url)
+    if m:
+        return f"https://{m.group(1)}/{m.group(2)}"
+    return ""
+
+
+def _probe_lanzou(url: str) -> ProbeResult:
+    canonical = _extract_lanzou_url(url)
+    if not canonical:
+        return ProbeResult(alive=None, reason="cannot extract lanzou share url", title="")
+    try:
+        text = _get_text(canonical)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return ProbeResult(alive=False, reason="HTTP 404", title="")
+        return ProbeResult(alive=None, reason=f"HTTP {exc.code}", title="")
+    except Exception as exc:
+        return ProbeResult(alive=None, reason=str(exc)[:100], title="")
+
+    snippet = text[:3000]
+
+    # Dead signals
+    dead_patterns = ["文件取消分享", "文件不存在", "文件已删除", "分享文件不存在",
+                     "来晚了", "文件已取消", "该分享文件已过期"]
+    for pattern in dead_patterns:
+        if pattern in snippet:
+            return ProbeResult(alive=False, reason=f"page: {pattern}", title="")
+
+    # Alive signals — lanzou pages contain download buttons or file info
+    alive_patterns = ["下载地址", "文件大小", "class=\"d\"", "class=\"n_box\"",
+                      "fn ", "downs ", "f_name"]
+    for pattern in alive_patterns:
+        if pattern in snippet:
+            return ProbeResult(alive=True, reason="share page active", title="")
+
+    # If page loaded with reasonable content, cautiously mark as alive
+    if len(text) > 500:
+        return ProbeResult(alive=True, reason="page loaded (no dead signals)", title="")
+
+    return ProbeResult(alive=None, reason="ambiguous page", title="")
+
+
+# ---------------------------------------------------------------------------
+# Tianyi / 天翼云盘 (cloud.189.cn) — share info API, zero login
+# ---------------------------------------------------------------------------
+
+_TIANYI_SHARE_RE = re.compile(r"cloud\.189\.cn/(?:web/share\?code=|t/)([A-Za-z0-9]+)")
+
+def _extract_tianyi_code(url: str) -> str:
+    m = _TIANYI_SHARE_RE.search(url)
+    return m.group(1) if m else ""
+
+
+def _probe_tianyi(url: str) -> ProbeResult:
+    share_code = _extract_tianyi_code(url)
+    if not share_code:
+        return ProbeResult(alive=None, reason="cannot extract share code", title="")
+    try:
+        api_url = f"https://cloud.189.cn/api/open/share/getShareInfoByCode.action?shareCode={share_code}"
+        text = _get_text(api_url)
+    except urllib.error.HTTPError as exc:
+        if exc.code in (404, 400):
+            return ProbeResult(alive=False, reason=f"HTTP {exc.code}", title="")
+        return ProbeResult(alive=None, reason=f"HTTP {exc.code}", title="")
+    except Exception as exc:
+        return ProbeResult(alive=None, reason=str(exc)[:100], title="")
+
+    try:
+        resp = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        # Not JSON — check page content for dead signals
+        if "不存在" in text[:1000] or "已过期" in text[:1000] or "已取消" in text[:1000]:
+            return ProbeResult(alive=False, reason="page dead signal", title="")
+        if len(text) > 500:
+            return ProbeResult(alive=True, reason="page loaded", title="")
+        return ProbeResult(alive=None, reason="non-json response", title="")
+
+    # JSON response — check status
+    res_code = resp.get("res_code") or resp.get("errorCode") or resp.get("code")
+    if res_code == 0 or resp.get("shareId"):
+        title = resp.get("fileName", "") or resp.get("shareName", "")
+        return ProbeResult(alive=True, reason="share active", title=title)
+    res_msg = str(resp.get("res_message", "") or resp.get("errorMsg", "") or resp.get("message", ""))
+    if any(kw in res_msg for kw in ("不存在", "已过期", "已取消", "已失效", "cancelled")):
+        return ProbeResult(alive=False, reason=res_msg[:80], title="")
+    if res_code and int(str(res_code)) < 0:
+        return ProbeResult(alive=False, reason=f"error code {res_code}", title="")
+    return ProbeResult(alive=None, reason="ambiguous api response", title="")
+
+
+# ---------------------------------------------------------------------------
+# 115 网盘 — page-level status detection, conservative (no API login needed)
+# ---------------------------------------------------------------------------
+
+_115_SHARE_RE = re.compile(r"115\.com/s/([A-Za-z0-9]+)")
+
+def _extract_115_share_code(url: str) -> str:
+    m = _115_SHARE_RE.search(url)
+    return m.group(1) if m else ""
+
+
+def _probe_115(url: str) -> ProbeResult:
+    share_code = _extract_115_share_code(url)
+    if not share_code:
+        return ProbeResult(alive=None, reason="cannot extract share code", title="")
+    try:
+        check_url = f"https://115.com/s/{share_code}"
+        text = _get_text(check_url)
+    except urllib.error.HTTPError as exc:
+        if exc.code in (404, 410):
+            return ProbeResult(alive=False, reason=f"HTTP {exc.code}", title="")
+        return ProbeResult(alive=None, reason=f"HTTP {exc.code}", title="")
+    except Exception as exc:
+        return ProbeResult(alive=None, reason=str(exc)[:100], title="")
+
+    snippet = text[:3000]
+
+    # Dead signals
+    dead_patterns = ["文件已失效", "分享已取消", "文件不存在", "已过期",
+                     "来晚了", "该分享已删除", "违规内容"]
+    for pattern in dead_patterns:
+        if pattern in snippet:
+            return ProbeResult(alive=False, reason=f"page: {pattern}", title="")
+
+    # Alive signals
+    alive_patterns = ["文件大小", "分享时间", "保存到我的网盘", "receive"]
+    for pattern in alive_patterns:
+        if pattern in snippet:
+            return ProbeResult(alive=True, reason="share page active", title="")
+
+    # 115 has heavy anti-bot; if we can't determine, return unknown
+    return ProbeResult(alive=None, reason="ambiguous (115 anti-bot)", title="")
+
+
+# ---------------------------------------------------------------------------
+# PikPak — share info API, zero login
+# ---------------------------------------------------------------------------
+
+_PIKPAK_SHARE_RE = re.compile(r"mypikpak\.com/s/([A-Za-z0-9_-]+)")
+
+def _extract_pikpak_share_id(url: str) -> str:
+    m = _PIKPAK_SHARE_RE.search(url)
+    return m.group(1) if m else ""
+
+
+def _probe_pikpak(url: str) -> ProbeResult:
+    share_id = _extract_pikpak_share_id(url)
+    if not share_id:
+        return ProbeResult(alive=None, reason="cannot extract share_id", title="")
+    try:
+        api_url = f"https://api-drive.mypikpak.com/drive/v1/share?share_id={share_id}&pass_code_token="
+        text = _get_text(api_url)
+    except urllib.error.HTTPError as exc:
+        if exc.code in (404, 400, 403):
+            return ProbeResult(alive=False, reason=f"HTTP {exc.code}", title="")
+        return ProbeResult(alive=None, reason=f"HTTP {exc.code}", title="")
+    except Exception as exc:
+        return ProbeResult(alive=None, reason=str(exc)[:100], title="")
+
+    try:
+        resp = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        return ProbeResult(alive=None, reason="non-json response", title="")
+
+    # Check for errors
+    error = resp.get("error", "")
+    if error:
+        error_lower = str(error).lower()
+        if "not_found" in error_lower or "invalid" in error_lower or "expired" in error_lower:
+            return ProbeResult(alive=False, reason=str(error)[:80], title="")
+        return ProbeResult(alive=None, reason=str(error)[:80], title="")
+
+    # Success — share info present
+    if resp.get("share_id") or resp.get("file_info") or resp.get("title"):
+        title = resp.get("title", "") or resp.get("name", "")
+        return ProbeResult(alive=True, reason="share active", title=title)
+
+    return ProbeResult(alive=None, reason="ambiguous api response", title="")
+
+
 _PROVIDER_PROBERS = {
     "aliyun": _probe_aliyun,
     "quark": _probe_quark,
     "baidu": _probe_baidu,
+    "lanzou": _probe_lanzou,
+    "tianyi": _probe_tianyi,
+    "115": _probe_115,
+    "pikpak": _probe_pikpak,
 }
 
 

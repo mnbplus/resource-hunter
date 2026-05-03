@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -74,7 +76,7 @@ class ResourceHunterEngine:
             sort_keys=True,
             ensure_ascii=False,
         )
-        return __import__("hashlib").sha256(payload.encode("utf-8")).hexdigest()
+        return str(__import__("hashlib").sha256(payload.encode("utf-8")).hexdigest())
 
     def _catalog_for_channel(self, channel: str) -> list[SourceAdapter]:
         return self.pan_sources if channel == "pan" else self.torrent_sources
@@ -138,30 +140,33 @@ class ResourceHunterEngine:
         results: list[SearchResult] = []
         client = HTTPClient(retries=profile.retries, default_timeout=profile.timeout)
         query_budget = 1 if (profile.default_degraded or degraded_before) else profile.query_budget
-        for query in queries[:query_budget]:
-            if not query:
-                continue
-            started = time.time()
-            try:
-                batch = source.search(query, intent, limit, page, client)
-                status.latency_ms = int((time.time() - started) * 1000)
-                status.ok = True
-                status.error = ""
-                status.failure_kind = ""
-                if batch:
-                    status.degraded = source_health(self.cache, source.name).get("degraded", degraded_before)
-                    status.degraded_reason = current_health.get("degraded_reason", "")
-                    status.recovery_state = "healthy" if not status.degraded else "recovering"
-                    results.extend(batch)
-                    break
-            except Exception as exc:
-                status.ok = False
-                status.latency_ms = int((time.time() - started) * 1000)
-                status.error = str(exc)[:200]
-                status.failure_kind = _classify_failure_kind(status.error)
-                status.degraded = profile.default_degraded or degraded_before
-                status.degraded_reason = status.failure_kind or "request_failure"
-                status.recovery_state = "recovering" if status.degraded else "degraded"
+        try:
+            for query in queries[:query_budget]:
+                if not query:
+                    continue
+                started = time.time()
+                try:
+                    batch = source.search(query, intent, limit, page, client)
+                    status.latency_ms = int((time.time() - started) * 1000)
+                    status.ok = True
+                    status.error = ""
+                    status.failure_kind = ""
+                    if batch:
+                        status.degraded = source_health(self.cache, source.name).get("degraded", degraded_before)
+                        status.degraded_reason = current_health.get("degraded_reason", "")
+                        status.recovery_state = "healthy" if not status.degraded else "recovering"
+                        results.extend(batch)
+                        break
+                except Exception as exc:
+                    status.ok = False
+                    status.latency_ms = int((time.time() - started) * 1000)
+                    status.error = str(exc)[:200]
+                    status.failure_kind = _classify_failure_kind(status.error)
+                    status.degraded = profile.default_degraded or degraded_before
+                    status.degraded_reason = status.failure_kind or "request_failure"
+                    status.recovery_state = "recovering" if status.degraded else "degraded"
+        finally:
+            client.close()
         self.cache.record_source_status(status)
         return status, results
 
@@ -209,18 +214,19 @@ class ResourceHunterEngine:
         statuses: list[SourceStatus] = []
         warnings: list[str] = []
 
-        for channel in plan.channels:
-            queries = plan.pan_queries if channel == "pan" else plan.torrent_queries
-            ordered_sources = self._ordered_sources(channel, plan, intent)
-            with ThreadPoolExecutor(max_workers=min(4, len(ordered_sources) or 1)) as executor:
-                futures = [
-                    executor.submit(self._search_source, source, channel, queries, intent, page, limit)
-                    for source in ordered_sources
-                ]
-                for future in as_completed(futures):
-                    status, source_results = future.result()
-                    statuses.append(status)
-                    results.extend(source_results)
+        all_futures: list[tuple[str, Any]] = []
+        max_workers = min(8, max(4, sum(len(self._ordered_sources(ch, plan, intent)) for ch in plan.channels)))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            for channel in plan.channels:
+                queries = plan.pan_queries if channel == "pan" else plan.torrent_queries
+                ordered_sources = self._ordered_sources(channel, plan, intent)
+                for source in ordered_sources:
+                    future = executor.submit(self._search_source, source, channel, queries, intent, page, limit)
+                    all_futures.append((channel, future))
+            for channel, future in all_futures:
+                status, source_results = future.result()
+                statuses.append(status)
+                results.extend(source_results)
 
         scored = [score_result(result, intent, cache=self.cache) for result in results]
         deduped = deduplicate_results(scored)
@@ -243,6 +249,35 @@ class ResourceHunterEngine:
         if not ordered:
             warnings.append("no results returned from active sources")
 
+        # Zero-config diagnostics: help users understand what can be enabled
+        warnings.extend(self._zero_config_warnings(statuses, ordered))
+
+        retry_info: dict[str, Any] = {}
+
+        # Smart auto-retry: if zero results, simplify the query and retry once
+        if not ordered and page == 1:
+            simplified = _simplify_query(intent.original_query)
+            if simplified and simplified != intent.original_query:
+                from .intent import parse_intent
+                retry_intent = parse_intent(simplified, explicit_kind=intent.kind)
+                retry_intent = self._resolve_aliases(retry_intent)
+                retry_plan = build_plan(retry_intent)
+                retry_response = self.search(
+                    retry_intent, retry_plan, page=1, limit=limit,
+                    use_cache=use_cache, probe_links=probe_links,
+                )
+                if retry_response.get("results"):
+                    retry_response.setdefault("meta", {})
+                    retry_response["meta"]["auto_retry"] = True
+                    retry_response["meta"]["original_query"] = intent.original_query
+                    retry_response["meta"]["retry_query"] = simplified
+                    retry_response["warnings"] = (
+                        [f"auto-retry: simplified \"{intent.original_query}\" → \"{simplified}\""]
+                        + retry_response.get("warnings", [])
+                    )
+                    return retry_response
+                retry_info = {"attempted": simplified, "success": False}
+
         response = {
             "schema_version": "3",
             "query": intent.original_query,
@@ -262,6 +297,7 @@ class ResourceHunterEngine:
                 "alias_resolution": intent.alias_resolution,
                 "resolved_titles": intent.resolved_titles,
                 "resolved_year": intent.resolved_year or intent.year,
+                "retry_info": retry_info if retry_info else None,
             },
         }
         if use_cache:
@@ -328,6 +364,69 @@ class ResourceHunterEngine:
 
     def run_benchmark(self) -> dict[str, Any]:
         return run_benchmark_suite()
+
+    # -- zero-config intelligence -----------------------------------------
+
+    @staticmethod
+    def _zero_config_warnings(
+        statuses: list[SourceStatus],
+        results: list[SearchResult],
+    ) -> list[str]:
+        """Generate helpful diagnostics for zero-config users.
+
+        Non-blocking — these appear in the warnings array only when
+        optional sources are unconfigured and could improve coverage.
+        """
+        warnings: list[str] = []
+
+        # Count active pan results
+        pan_results = [r for r in results if r.channel == "pan"]
+        pan_statuses = [s for s in statuses if s.channel == "pan"]
+        active_pan = [s for s in pan_statuses if s.ok and not s.skipped]
+
+        # If no pan results and optional pan tokens are missing
+        if not pan_results:
+            missing: list[str] = []
+            if not os.environ.get("PANSOU_TOKEN", "").strip():
+                missing.append("PANSOU_TOKEN (enables ps.252035 + panhunt)")
+            if not os.environ.get("PANSOU_API_URL", "").strip():
+                missing.append("PANSOU_API_URL (enables self-hosted pansou)")
+            if missing and len(active_pan) <= 1:
+                warnings.append(
+                    f"low pan coverage — configure {', '.join(missing)} in .env for more cloud drive results"
+                )
+
+        # If torznab is not configured, mention it as an enhancement option
+        if not os.environ.get("TORZNAB_URL", "").strip():
+            torrent_results = [r for r in results if r.channel == "torrent"]
+            if len(torrent_results) < 3:
+                warnings.append(
+                    "tip: TORZNAB_URL + TORZNAB_APIKEY (Jackett/Prowlarr) unlocks 500+ additional trackers"
+                )
+
+        return warnings
+
+
+def _simplify_query(query: str) -> str:
+    """Progressively simplify a query for auto-retry.
+
+    Strategy: strip quality/format modifiers, keep the core title.
+    Example: "Oppenheimer 2023 4K BluRay REMUX" → "Oppenheimer 2023"
+    """
+    # Strip common quality/format suffixes
+    simplified = re.sub(
+        r'\b(?:4[Kk]|2160[Pp]|1080[Pp]|720[Pp]|480[Pp]|UHD|HDR10?\+?|DV|'
+        r'[Bb]lu-?[Rr]ay|REMUX|WEB-?DL|WEB-?Rip|HDCAM|DVDRip|BDRip|'
+        r'HEVC|H\.?265|H\.?264|x264|x265|AAC|DTS(?:-HD)?|Atmos|'
+        r'FLAC|MP3|WAV|ALAC|epub|pdf|mobi|azw3?|djvu)\b',
+        '', query, flags=re.I
+    )
+    # Clean up extra whitespace
+    simplified = re.sub(r'\s+', ' ', simplified).strip()
+    # Don't retry if nothing was stripped or result is too short
+    if simplified == query or len(simplified) < 3:
+        return ""
+    return simplified
 
 
 __all__ = ["ResourceHunterEngine", "build_plan", "source_health", "source_is_degraded"]

@@ -67,12 +67,30 @@ def test_engine_ranks_exact_title_episode_above_episode_only(tmp_path):
     assert weak["match_bucket"] == "episode_only_match"
 
 
-def test_degraded_sources_stay_enabled_but_rank_lower(tmp_path):
+def test_degraded_sources_stay_enabled_but_rank_lower(monkeypatch, tmp_path):
+    from quarry.sources.base import SourceRuntimeProfile
+
+    def fake_profile(name: str) -> SourceRuntimeProfile:
+        if name == "ps.252035":
+            return SourceRuntimeProfile(
+                supported_kinds=("movie", "tv", "anime", "music", "software", "book", "general"),
+                timeout=8, retries=0, degraded_score_penalty=10, cooldown_seconds=90,
+                failure_threshold=1, query_budget=2, default_degraded=True,
+            )
+        return SourceRuntimeProfile(
+            supported_kinds=("movie", "tv", "anime", "music", "software", "book", "general"),
+            timeout=10, retries=0, degraded_score_penalty=6, cooldown_seconds=120,
+            failure_threshold=2, query_budget=2, default_degraded=False,
+        )
+
+    monkeypatch.setattr("quarry.ranking.profile_for", fake_profile)
+    monkeypatch.setattr("quarry.engine.profile_for", fake_profile)
+
     cache = ResourceCache(tmp_path / "cache.db")
     engine = ResourceHunterEngine(cache=cache)
     stable = SearchResult(
         channel="pan",
-        source="ps.252035",
+        source="upyunso",
         provider="aliyun",
         title="Oppenheimer 2023 2160p HDR",
         link_or_magnet="https://example.com/share/111",
@@ -80,17 +98,17 @@ def test_degraded_sources_stay_enabled_but_rank_lower(tmp_path):
     )
     degraded = SearchResult(
         channel="pan",
-        source="hunhepan",
+        source="ps.252035",
         provider="aliyun",
         title="Oppenheimer 2023 2160p HDR",
         link_or_magnet="https://example.com/share/222",
         share_id_or_info_hash="222",
     )
     engine.torrent_sources = []
-    engine.pan_sources = [FakeSource("ps.252035", "pan", 1, [stable]), FakeSource("hunhepan", "pan", 3, [degraded])]
+    engine.pan_sources = [FakeSource("upyunso", "pan", 1, [stable]), FakeSource("ps.252035", "pan", 3, [degraded])]
     response = engine.search(parse_intent("Oppenheimer 2023", explicit_kind="movie"), use_cache=False)
-    assert response["results"][0]["source"] == "ps.252035"
-    assert [item["source"] for item in response["results"]] == ["ps.252035"]
+    assert response["results"][0]["source"] == "upyunso"
+    assert [item["source"] for item in response["results"]] == ["upyunso"]
 
 
 def test_cli_text_limit_is_hard_contract(monkeypatch, capsys):
@@ -261,13 +279,24 @@ def test_alias_resolution_for_chinese_old_movie_drives_plan_and_confidence(monke
     assert "No confident match" in text
 
 
-def test_default_degraded_source_recovers_after_probe_or_real_success(tmp_path):
+def test_default_degraded_source_recovers_after_probe_or_real_success(monkeypatch, tmp_path):
+    from quarry.sources.base import SourceRuntimeProfile
+    
+    def fake_profile(name):
+        return SourceRuntimeProfile(
+            supported_kinds=("general",),
+            timeout=10, retries=1, degraded_score_penalty=10, cooldown_seconds=90, failure_threshold=1, query_budget=1,
+            default_degraded=(name == "fake_degraded")
+        )
+    monkeypatch.setattr("quarry.ranking.profile_for", fake_profile)
+    monkeypatch.setattr("quarry.engine.profile_for", fake_profile)
+
     cache = ResourceCache(tmp_path / "cache.db")
-    assert source_is_degraded(cache, "hunhepan") is True
+    assert source_is_degraded(cache, "fake_degraded") is True
 
     cache.record_source_status(
         SourceStatus(
-            source="hunhepan",
+            source="fake_degraded",
             channel="pan",
             priority=3,
             ok=True,
@@ -275,12 +304,12 @@ def test_default_degraded_source_recovers_after_probe_or_real_success(tmp_path):
             failure_kind="probe_ok",
         )
     )
-    assert source_is_degraded(cache, "hunhepan") is False
+    assert source_is_degraded(cache, "fake_degraded") is False
 
     cache2 = ResourceCache(tmp_path / "cache2.db")
     cache2.record_source_status(
         SourceStatus(
-            source="hunhepan",
+            source="fake_degraded",
             channel="pan",
             priority=3,
             ok=False,
@@ -291,7 +320,7 @@ def test_default_degraded_source_recovers_after_probe_or_real_success(tmp_path):
     )
     cache2.record_source_status(
         SourceStatus(
-            source="hunhepan",
+            source="fake_degraded",
             channel="pan",
             priority=3,
             ok=True,
@@ -301,7 +330,7 @@ def test_default_degraded_source_recovers_after_probe_or_real_success(tmp_path):
     )
     cache2.record_source_status(
         SourceStatus(
-            source="hunhepan",
+            source="fake_degraded",
             channel="pan",
             priority=3,
             ok=True,
@@ -309,4 +338,4 @@ def test_default_degraded_source_recovers_after_probe_or_real_success(tmp_path):
             failure_kind="",
         )
     )
-    assert source_is_degraded(cache2, "hunhepan") is False
+    assert source_is_degraded(cache2, "fake_degraded") is False

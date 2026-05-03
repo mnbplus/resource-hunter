@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from typing import Any
 
@@ -17,7 +18,7 @@ from .video_core import VideoManager, format_video_text
 
 def _resolve_kind(args: argparse.Namespace) -> str | None:
     if getattr(args, "kind", None):
-        return args.kind
+        return str(args.kind)
     for name in ("movie", "tv", "anime", "music", "software", "book", "general"):
         if getattr(args, name, False):
             return name
@@ -46,6 +47,25 @@ def _format_doctor_text(payload: dict[str, Any]) -> str:
     ]
     lines.append("")
     lines.append(format_sources_text(payload["sources"]))
+
+    # Zero-config coverage
+    zc = payload.get("zero_config", {})
+    if zc:
+        lines.append("")
+        lines.append("Zero-config coverage:")
+        lines.append(f"  active:     {zc['active_count']}/{zc['total_count']} sources ({zc['coverage_pct']}%)")
+        lines.append(f"  zero-conf:  {', '.join(zc['zero_config_sources'][:10])}")
+        if zc.get("needs_token"):
+            lines.append(f"  needs key:  {', '.join(zc['needs_token'])}")
+
+    # Pan probe coverage
+    pp = payload.get("pan_probe", {})
+    if pp:
+        lines.append("")
+        lines.append("Pan link probe coverage:")
+        lines.append(f"  supported:  {', '.join(pp['supported_providers'])}")
+        lines.append(f"  count:      {pp['provider_count']} providers")
+
     if payload["video"].get("recent_manifests"):
         lines.append("")
         lines.append("Recent video manifests:")
@@ -92,7 +112,27 @@ def _sources(engine: ResourceHunterEngine, args: argparse.Namespace) -> int:
 
 
 def _doctor(engine: ResourceHunterEngine, args: argparse.Namespace) -> int:
+    from .pan_probe import _PROVIDER_PROBERS
     video_manager = VideoManager(engine.cache)
+
+    # Zero-config coverage analysis
+    _ZERO_CONFIG_SOURCES = {
+        "upyunso", "panhunt", "nyaa", "dmhy", "bangumi_moe", "subsplease",
+        "eztv", "torrentgalaxy", "bitsearch", "tpb", "yts", "1337x",
+        "limetorrents", "torlock", "fitgirl", "torrentmac", "ext_to", "annas",
+    }
+    _TOKEN_SOURCES = {
+        "ps.252035": "PANSOU_TOKEN",
+        "pansou": "PANSOU_API_URL",
+        "torznab": "TORZNAB_URL",
+    }
+    all_names = [a.name for a in engine.pan_sources + engine.torrent_sources]
+    zero_conf_active = [n for n in all_names if n in _ZERO_CONFIG_SOURCES]
+    needs_token: list[str] = []
+    for src, var in _TOKEN_SOURCES.items():
+        if src in all_names and not os.environ.get(var, "").strip():
+            needs_token.append(f"{src} ({var})")
+
     payload = {
         "schema_version": "3",
         "python": sys.executable,
@@ -101,6 +141,17 @@ def _doctor(engine: ResourceHunterEngine, args: argparse.Namespace) -> int:
         "storage_root": str(storage_root()),
         "sources": engine.source_catalog(probe=args.probe),
         "video": video_manager.doctor(),
+        "zero_config": {
+            "total_count": len(all_names),
+            "active_count": len(zero_conf_active) + len([s for s, v in _TOKEN_SOURCES.items() if s in all_names and os.environ.get(v, "").strip()]),
+            "coverage_pct": round(100 * (len(zero_conf_active) + len([s for s, v in _TOKEN_SOURCES.items() if s in all_names and os.environ.get(v, "").strip()])) / max(len(all_names), 1)),
+            "zero_config_sources": zero_conf_active,
+            "needs_token": needs_token,
+        },
+        "pan_probe": {
+            "supported_providers": sorted(_PROVIDER_PROBERS.keys()),
+            "provider_count": len(_PROVIDER_PROBERS),
+        },
     }
     if args.json:
         print(dump_json(payload))

@@ -8,7 +8,7 @@ from .ranking import BUCKET_LABELS
 
 def _display_tier(item: dict[str, Any]) -> str:
     if item.get("tier"):
-        return item["tier"]
+        return str(item["tier"])
     bucket = item.get("match_bucket")
     if bucket in {"exact_title_episode", "exact_title_family"}:
         return "top"

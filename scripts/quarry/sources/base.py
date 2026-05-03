@@ -4,8 +4,10 @@ from __future__ import annotations
 import hashlib
 import html
 import json
+import logging
 import os
 import re
+import ssl
 import time
 import urllib.error
 import urllib.parse
@@ -13,6 +15,34 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Any
+
+_logger = logging.getLogger(__name__)
+
+
+def _lenient_ssl_context() -> ssl.SSLContext:
+    """Create a lenient SSL context for sites with non-standard TLS (e.g. yts.mx)."""
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    # Allow legacy TLS renegotiation and older protocols
+    ctx.options &= ~ssl.OP_NO_SSLv3  # type: ignore[assignment]
+    return ctx
+
+
+def _urllib_opener() -> urllib.request.OpenerDirector:
+    """Build an opener that respects HTTPS_PROXY env var."""
+    proxy_url = (
+        os.environ.get("HTTPS_PROXY")
+        or os.environ.get("HTTP_PROXY")
+        or os.environ.get("https_proxy")
+        or os.environ.get("http_proxy")
+    )
+    handlers: list[urllib.request.BaseHandler] = [
+        urllib.request.HTTPSHandler(context=_lenient_ssl_context()),
+    ]
+    if proxy_url:
+        handlers.append(urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url}))
+    return urllib.request.build_opener(*handlers)
 
 try:
     import httpx as _httpx
@@ -80,13 +110,10 @@ SOURCE_RUNTIME_PROFILES: dict[str, SourceRuntimeProfile] = {
         supported_kinds=("movie", "tv", "anime", "music", "software", "book", "general"),
         timeout=10, retries=0, degraded_score_penalty=6, cooldown_seconds=120, failure_threshold=2, query_budget=2, default_degraded=False,
     ),
-    "hunhepan": SourceRuntimeProfile(
-        supported_kinds=("movie", "tv", "anime", "music", "software", "book", "general"),
-        timeout=6, retries=0, degraded_score_penalty=18, cooldown_seconds=90, failure_threshold=1, query_budget=2, default_degraded=True,
-    ),
+
     "ps.252035": SourceRuntimeProfile(
         supported_kinds=("movie", "tv", "anime", "music", "software", "book", "general"),
-        timeout=8, retries=0, degraded_score_penalty=10, cooldown_seconds=90, failure_threshold=1, query_budget=2, default_degraded=False,
+        timeout=8, retries=1, degraded_score_penalty=10, cooldown_seconds=90, failure_threshold=1, query_budget=1, default_degraded=False,
     ),
     "panhunt": SourceRuntimeProfile(
         supported_kinds=("movie", "tv", "anime", "music", "software", "book", "general"),
@@ -106,7 +133,7 @@ SOURCE_RUNTIME_PROFILES: dict[str, SourceRuntimeProfile] = {
     ),
     "yts": SourceRuntimeProfile(
         supported_kinds=("movie",),
-        timeout=6, retries=0, degraded_score_penalty=16, cooldown_seconds=90, failure_threshold=1, query_budget=2, default_degraded=False,
+        timeout=12, retries=1, degraded_score_penalty=16, cooldown_seconds=90, failure_threshold=2, query_budget=2, default_degraded=False,
     ),
     "1337x": SourceRuntimeProfile(
         supported_kinds=("movie", "tv", "anime", "software", "book", "general"),
@@ -115,6 +142,7 @@ SOURCE_RUNTIME_PROFILES: dict[str, SourceRuntimeProfile] = {
     "limetorrents": SourceRuntimeProfile(
         supported_kinds=("movie", "tv", "anime", "music", "software", "book", "general"),
         timeout=10, retries=0, degraded_score_penalty=4, cooldown_seconds=180, failure_threshold=2, query_budget=2,
+        default_degraded=True,
     ),
     "fitgirl": SourceRuntimeProfile(
         supported_kinds=("software", "general"),
@@ -135,7 +163,36 @@ SOURCE_RUNTIME_PROFILES: dict[str, SourceRuntimeProfile] = {
     "annas": SourceRuntimeProfile(
         supported_kinds=("book", "general"),
         timeout=15, retries=0, degraded_score_penalty=4, cooldown_seconds=300, failure_threshold=2, query_budget=1,
-        default_degraded=False,
+        default_degraded=True,
+    ),
+    "pansou": SourceRuntimeProfile(
+        supported_kinds=("movie", "tv", "anime", "music", "software", "book", "general"),
+        timeout=10, retries=0, degraded_score_penalty=6, cooldown_seconds=90, failure_threshold=2, query_budget=2,
+    ),
+    "dmhy": SourceRuntimeProfile(
+        supported_kinds=("anime", "music", "general"),
+        timeout=10, retries=1, degraded_score_penalty=0, cooldown_seconds=180, failure_threshold=2, query_budget=3,
+    ),
+    "bangumi_moe": SourceRuntimeProfile(
+        supported_kinds=("anime", "general"),
+        timeout=10, retries=1, degraded_score_penalty=0, cooldown_seconds=180, failure_threshold=2, query_budget=2,
+    ),
+    "torrentgalaxy": SourceRuntimeProfile(
+        supported_kinds=("movie", "tv", "anime", "music", "software", "book", "general"),
+        timeout=12, retries=0, degraded_score_penalty=4, cooldown_seconds=180, failure_threshold=2, query_budget=2,
+    ),
+    "torlock": SourceRuntimeProfile(
+        supported_kinds=("movie", "tv", "anime", "music", "software", "book", "general"),
+        timeout=12, retries=0, degraded_score_penalty=4, cooldown_seconds=180, failure_threshold=2, query_budget=2,
+    ),
+    "ext_to": SourceRuntimeProfile(
+        supported_kinds=("movie", "tv", "anime", "music", "software", "book", "general"),
+        timeout=10, retries=0, degraded_score_penalty=4, cooldown_seconds=180, failure_threshold=2, query_budget=2,
+        default_degraded=True,
+    ),
+    "subsplease": SourceRuntimeProfile(
+        supported_kinds=("anime",),
+        timeout=8, retries=1, degraded_score_penalty=0, cooldown_seconds=180, failure_threshold=2, query_budget=2,
     ),
 }
 
@@ -176,7 +233,8 @@ class HTTPClient:
                 "timeout": self.default_timeout,
                 "follow_redirects": True,
                 "headers": DEFAULT_HEADERS,
-                "transport": _httpx.HTTPTransport(retries=self.retries),
+                "transport": _httpx.HTTPTransport(retries=self.retries, verify=_lenient_ssl_context()),
+                "verify": _lenient_ssl_context(),
             }
             if proxy_url:
                 kwargs["proxy"] = proxy_url
@@ -193,7 +251,7 @@ class HTTPClient:
         try:
             response = self._session.get(url, timeout=effective_timeout)
             response.raise_for_status()
-            return response.text
+            return str(response.text)
         except Exception as exc:
             error_str = str(exc)
             if hasattr(exc, "response") and exc.response is not None:  # type: ignore[union-attr]
@@ -210,7 +268,7 @@ class HTTPClient:
         try:
             response = self._session.post(url, json=json_data, headers=merged_headers, timeout=effective_timeout)
             response.raise_for_status()
-            return response.text
+            return str(response.text)
         except Exception as exc:
             error_str = str(exc)
             if hasattr(exc, "response") and exc.response is not None:  # type: ignore[union-attr]
@@ -221,12 +279,13 @@ class HTTPClient:
     def _request_urllib(self, url: str, timeout: int | None = None) -> str:
         timeout = timeout or self.default_timeout
         last_error = ""
+        opener = _urllib_opener()
         for attempt in range(self.retries + 1):
             request = urllib.request.Request(url, headers=DEFAULT_HEADERS)
             try:
-                with urllib.request.urlopen(request, timeout=timeout) as response:
+                with opener.open(request, timeout=timeout) as response:
                     charset = response.headers.get_content_charset() or "utf-8"
-                    return response.read().decode(charset, errors="replace")
+                    return str(response.read().decode(charset, errors="replace"))
             except urllib.error.HTTPError as exc:
                 last_error = f"HTTP {exc.code}"
                 if 400 <= exc.code < 500:
@@ -242,12 +301,13 @@ class HTTPClient:
         last_error = ""
         merged_headers = {**DEFAULT_HEADERS, **headers, "Content-Type": "application/json"}
         data = json.dumps(json_data).encode("utf-8")
+        opener = _urllib_opener()
         for attempt in range(self.retries + 1):
             request = urllib.request.Request(url, data=data, headers=merged_headers, method="POST")
             try:
-                with urllib.request.urlopen(request, timeout=timeout) as response:
+                with opener.open(request, timeout=timeout) as response:
                     charset = response.headers.get_content_charset() or "utf-8"
-                    return response.read().decode(charset, errors="replace")
+                    return str(response.read().decode(charset, errors="replace"))
             except urllib.error.HTTPError as exc:
                 last_error = f"HTTP {exc.code}"
                 if 400 <= exc.code < 500:
@@ -285,7 +345,7 @@ class HTTPClient:
         try:
             response = self._cffi_session.get(url, timeout=effective_timeout)
             response.raise_for_status()
-            return response.text
+            return str(response.text)
         except Exception as exc:
             error_str = str(exc)
             if hasattr(exc, "status_code"):
@@ -301,7 +361,7 @@ class HTTPClient:
         try:
             response = self._cffi_session.post(url, json=json_data, headers=merged_headers, timeout=effective_timeout)
             response.raise_for_status()
-            return response.text
+            return str(response.text)
         except Exception as exc:
             error_str = str(exc)
             if hasattr(exc, "status_code"):
@@ -323,7 +383,8 @@ class HTTPClient:
     def get_json(self, url: str, timeout: int | None = None) -> dict[str, Any] | list[Any]:
         payload = self._request(url, timeout=timeout)
         try:
-            return json.loads(payload)
+            parsed: dict[str, Any] | list[Any] = json.loads(payload)
+            return parsed
         except json.JSONDecodeError as exc:
             raise RuntimeError(f"invalid json from {url}: {exc}") from exc
 
@@ -335,7 +396,8 @@ class HTTPClient:
         else:
             payload = self._post_urllib(url, json_data, headers or {}, timeout=timeout)
         try:
-            return json.loads(payload)
+            parsed: dict[str, Any] | list[Any] = json.loads(payload)
+            return parsed
         except json.JSONDecodeError as exc:
             raise RuntimeError(f"invalid json from {url}: {exc}") from exc
 
@@ -413,7 +475,7 @@ class BrowserClient:
                 page.wait_for_selector(wait_for_selector, timeout=effective_timeout)
             # small delay for CF turnstile or dynamic content
             page.wait_for_timeout(2000)
-            return page.content()
+            return str(page.content())
         finally:
             page.close()
             
@@ -442,15 +504,15 @@ def _make_magnet(info_hash: str, name: str) -> str:
 
 
 def _clean_magnet(text: str) -> str:
-    return html.unescape(text or "").strip()
+    return str(html.unescape(text or "")).strip()
 
 
-def _format_size(size_bytes: int | str | None) -> str:
-    if size_bytes in (None, "", 0, "0"):
+def _format_size(size_bytes: int | float | str | None) -> str:
+    if size_bytes is None or size_bytes == "" or size_bytes == 0 or size_bytes == "0":
         return ""
     try:
-        numeric = float(size_bytes)
-    except Exception:
+        numeric = float(str(size_bytes))
+    except (ValueError, TypeError):
         return str(size_bytes)
     for unit in ("B", "KB", "MB", "GB", "TB"):
         if numeric < 1024:

@@ -19,7 +19,7 @@ class ResourceCache:
         self._init_db()
 
     def _connect(self) -> sqlite3.Connection:
-        conn = getattr(self._local, "conn", None)
+        conn: sqlite3.Connection | None = getattr(self._local, "conn", None)
         if conn is not None:
             try:
                 conn.execute("select 1")
@@ -86,6 +86,10 @@ class ResourceCache:
             self._ensure_column(conn, "source_status", "failure_kind", "failure_kind text not null default ''")
             self._ensure_column(conn, "source_status", "degraded", "degraded integer not null default 0")
             self._ensure_column(conn, "video_manifest", "task_id", "task_id text not null default ''")
+            # Performance indexes
+            conn.execute("create index if not exists idx_source_status_source_id on source_status(source, id desc)")
+            conn.execute("create index if not exists idx_source_status_epoch on source_status(checked_epoch)")
+            conn.execute("create index if not exists idx_search_cache_expires on search_cache(expires_at)")
 
     def get_search_cache(self, cache_key: str) -> dict[str, Any] | None:
         now = time.time()
@@ -96,7 +100,8 @@ class ResourceCache:
             ).fetchone()
         if not row:
             return None
-        return json.loads(row["payload"])
+        result: dict[str, Any] = json.loads(row["payload"])
+        return result
 
     def set_search_cache(self, cache_key: str, payload: dict[str, Any], ttl_seconds: int = 300) -> None:
         now = time.time()
@@ -256,7 +261,8 @@ class ResourceCache:
             ).fetchone()
         if not row:
             return None
-        return json.loads(row["payload"])
+        result: dict[str, Any] = json.loads(row["payload"])
+        return result
 
     def set_alias_resolution(self, cache_key: str, payload: dict[str, Any], ttl_seconds: int = 86400) -> None:
         now = time.time()
