@@ -10,6 +10,7 @@ import re
 import urllib.parse
 from .base import HTTPClient, SourceAdapter, _clean_magnet
 from ..common import extract_share_id, normalize_title, parse_quality_tags, quality_display_from_tags
+from ..exceptions import SourceNetworkError, SourceUnavailableError
 from ..models import SearchIntent, SearchResult
 
 _MAGNET_RE = re.compile(r'href="(magnet:\?[^"]+)"', re.I)
@@ -42,11 +43,10 @@ class ExtToSource(SourceAdapter):
 
         try:
             payload = http_client.get_text(url)
-        except RuntimeError as exc:
+        except Exception as exc:
             if "403" in str(exc):
-                # Cloudflare protection — can't bypass without FlareSolverr
-                return []
-            raise
+                raise SourceUnavailableError(f"ext_to blocked (Cloudflare): {exc}", source=self.name, url=url) from exc
+            raise SourceNetworkError(str(exc), source=self.name, url=url) from exc
         results: list[SearchResult] = []
 
         # Strategy 1: Try block-based splitting

@@ -196,8 +196,7 @@ SOURCE_RUNTIME_PROFILES: dict[str, SourceRuntimeProfile] = {
     ),
     "knaben": SourceRuntimeProfile(
         supported_kinds=("movie", "tv", "anime", "music", "software", "book", "general"),
-        timeout=12, retries=0, degraded_score_penalty=6, cooldown_seconds=180, failure_threshold=2, query_budget=2,
-        default_degraded=True,
+        timeout=12, retries=1, degraded_score_penalty=4, cooldown_seconds=180, failure_threshold=2, query_budget=2,
     ),
     "btdig": SourceRuntimeProfile(
         supported_kinds=("movie", "tv", "anime", "music", "software", "general"),
@@ -205,6 +204,25 @@ SOURCE_RUNTIME_PROFILES: dict[str, SourceRuntimeProfile] = {
         default_degraded=True,
     ),
     "solidtorrents": SourceRuntimeProfile(
+        supported_kinds=("movie", "tv", "anime", "music", "software", "book", "general"),
+        timeout=10, retries=0, degraded_score_penalty=6, cooldown_seconds=180, failure_threshold=2, query_budget=2,
+        default_degraded=True,
+    ),
+    "libgen": SourceRuntimeProfile(
+        supported_kinds=("book", "general"),
+        timeout=15, retries=0, degraded_score_penalty=4, cooldown_seconds=300, failure_threshold=2, query_budget=1,
+        default_degraded=True,
+    ),
+    "torrentcsv": SourceRuntimeProfile(
+        supported_kinds=("movie", "tv", "anime", "music", "software", "book", "general"),
+        timeout=10, retries=1, degraded_score_penalty=4, cooldown_seconds=180, failure_threshold=2, query_budget=2,
+    ),
+    "glodls": SourceRuntimeProfile(
+        supported_kinds=("movie", "tv", "anime", "music", "software", "general"),
+        timeout=12, retries=0, degraded_score_penalty=6, cooldown_seconds=180, failure_threshold=2, query_budget=2,
+        default_degraded=True,
+    ),
+    "idope": SourceRuntimeProfile(
         supported_kinds=("movie", "tv", "anime", "music", "software", "book", "general"),
         timeout=10, retries=0, degraded_score_penalty=6, cooldown_seconds=180, failure_threshold=2, query_budget=2,
         default_degraded=True,
@@ -415,6 +433,87 @@ class HTTPClient:
             return parsed
         except json.JSONDecodeError as exc:
             raise RuntimeError(f"invalid json from {url}: {exc}") from exc
+
+    # -- Mirror-aware methods ------------------------------------------------
+
+    def get_text_with_mirrors(
+        self,
+        source_name: str,
+        mirrors: tuple[str, ...] | list[str],
+        path: str,
+        timeout: int | None = None,
+    ) -> str:
+        """Try GET across mirrors with health-based ordering and backoff.
+
+        ``path`` is appended to each mirror base (e.g. "/search?q=test").
+        Returns response text from the first successful mirror.
+        """
+        from ..mirror_health import get_mirror_tracker
+        tracker = get_mirror_tracker()
+        ordered = tracker.ordered_mirrors(source_name, mirrors)
+        last_error = "all mirrors failed"
+        for mirror in ordered:
+            url = f"https://{mirror}{path}"
+            started = time.time()
+            try:
+                result = self._request(url, timeout=timeout)
+                latency = int((time.time() - started) * 1000)
+                tracker.record_success(source_name, mirror, latency)
+                return result
+            except RuntimeError as exc:
+                error_str = str(exc)
+                last_error = error_str
+                if tracker.is_rate_limited(error_str):
+                    tracker.record_rate_limited(source_name, mirror)
+                else:
+                    tracker.record_failure(source_name, mirror, error_str)
+        raise RuntimeError(last_error)
+
+    def get_json_with_mirrors(
+        self,
+        source_name: str,
+        mirrors: tuple[str, ...] | list[str],
+        path: str,
+        timeout: int | None = None,
+    ) -> dict[str, Any] | list[Any]:
+        """Mirror-aware GET with JSON parsing."""
+        payload = self.get_text_with_mirrors(source_name, mirrors, path, timeout=timeout)
+        try:
+            parsed: dict[str, Any] | list[Any] = json.loads(payload)
+            return parsed
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"invalid json: {exc}") from exc
+
+    def post_json_with_mirrors(
+        self,
+        source_name: str,
+        mirrors: tuple[str, ...] | list[str],
+        path: str,
+        json_data: dict[str, Any],
+        headers: dict[str, str] | None = None,
+        timeout: int | None = None,
+    ) -> dict[str, Any] | list[Any]:
+        """Mirror-aware POST JSON with health tracking."""
+        from ..mirror_health import get_mirror_tracker
+        tracker = get_mirror_tracker()
+        ordered = tracker.ordered_mirrors(source_name, mirrors)
+        last_error = "all mirrors failed"
+        for mirror in ordered:
+            url = f"https://{mirror}{path}"
+            started = time.time()
+            try:
+                result = self.post_json(url, json_data, headers=headers, timeout=timeout)
+                latency = int((time.time() - started) * 1000)
+                tracker.record_success(source_name, mirror, latency)
+                return result
+            except RuntimeError as exc:
+                error_str = str(exc)
+                last_error = error_str
+                if tracker.is_rate_limited(error_str):
+                    tracker.record_rate_limited(source_name, mirror)
+                else:
+                    tracker.record_failure(source_name, mirror, error_str)
+        raise RuntimeError(last_error)
 
     def close(self) -> None:
         if self._session is not None and hasattr(self._session, "close"):

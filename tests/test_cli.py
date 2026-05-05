@@ -32,7 +32,7 @@ def test_cli_search_json(monkeypatch, capsys):
         "meta": {"cached": False},
     }
 
-    def fake_search(self, intent, plan=None, page=1, limit=8, use_cache=True, probe_links=True):
+    def fake_search(self, intent, plan=None, page=1, limit=8, use_cache=True, probe_links=True, max_sources=0):
         return fake_response
 
     monkeypatch.setattr("quarry.engine.ResourceHunterEngine.search", fake_search)

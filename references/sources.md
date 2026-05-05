@@ -124,15 +124,58 @@
   - Best for: Books and ebooks (PDF, EPUB, MOBI)
   - API: HTML scraper on Anna's Archive search
   - Note: Protected by DDoS-Guard; benefits from `curl_cffi` for TLS impersonation; default_degraded
+- `libgen`
+  - Channel: `torrent`
+  - Priority: `2`
+  - Best for: Books, ebooks, academic papers (PDF, EPUB, MOBI, DJVU)
+  - API: HTML scraper on Library Genesis with multi-mirror fallback (libgen.rs/is/st)
+  - Note: default_degraded; direct download links via MD5 hash
+
+## DHT / backup sources
+
+- `knaben`
+  - Channel: `torrent`
+  - Priority: `3`
+  - Best for: General-purpose torrent meta-search (combines multiple public indexers)
+  - API: JSON POST
+- `btdig`
+  - Channel: `torrent`
+  - Priority: `4`
+  - Best for: DHT network crawler (finds rare torrents)
+  - API: HTML scraper
+  - Note: default_degraded
+- `solidtorrents`
+  - Channel: `torrent`
+  - Priority: `4`
+  - Best for: General-purpose torrent search
+  - API: HTML scraper
+  - Note: default_degraded
+- `torrentcsv`
+  - Channel: `torrent`
+  - Priority: `3`
+  - Best for: Open-source DHT torrent search
+  - API: JSON REST (clean, well-structured)
+- `glodls`
+  - Channel: `torrent`
+  - Priority: `4`
+  - Best for: General downloads (movies, TV, software, music)
+  - API: HTML scraper
+  - Note: default_degraded
+- `idope`
+  - Channel: `torrent`
+  - Priority: `4`
+  - Best for: DHT network torrent search (broad coverage)
+  - API: HTML scraper with dual-strategy parsing
+  - Note: default_degraded
 
 ## Default routing matrix
 
-- Movie: `upyunso -> pansou -> ps.252035 -> panhunt`, then `yts -> torrentgalaxy -> bitsearch -> tpb -> 1337x -> limetorrents -> torlock -> ext_to`
-- TV: `eztv -> torrentgalaxy -> bitsearch -> tpb -> 1337x -> limetorrents -> torlock -> ext_to`, then pan sources
-- Anime: `nyaa -> dmhy -> bangumi_moe -> bitsearch -> torrentgalaxy -> tpb -> 1337x -> limetorrents -> torlock -> ext_to`, then pan sources
-- Book: `annas -> torznab -> bitsearch -> 1337x -> limetorrents -> torrentgalaxy -> torlock -> ext_to -> tpb`, then pan sources
-- Music: pan sources first, then `nyaa -> dmhy -> bitsearch -> 1337x -> torrentgalaxy -> ext_to` (noise-filtered, no tpb)
-- Software: pan sources first, then `torrentmac -> fitgirl -> torrentgalaxy -> bitsearch -> tpb -> 1337x -> limetorrents -> torlock -> ext_to`
+- Movie: pan sources, then `yts → torrentgalaxy → bitsearch → tpb → 1337x → limetorrents → torlock → ext_to → knaben → solidtorrents → btdig → torrentcsv → glodls → idope`
+- TV: `eztv → torrentgalaxy → bitsearch → tpb → 1337x → limetorrents → torlock → ext_to → knaben → solidtorrents → btdig → torrentcsv → glodls → idope`, then pan sources
+- Anime: `nyaa → dmhy → bangumi_moe → bitsearch → torrentgalaxy → tpb → 1337x → limetorrents → torlock → ext_to → knaben → solidtorrents → btdig → torrentcsv → idope`, then pan sources
+- Book: `annas → libgen → torznab → bitsearch → 1337x → limetorrents → torrentgalaxy → torlock → ext_to → tpb → knaben → solidtorrents → btdig → torrentcsv → idope`, then pan sources
+- Music: pan sources first, then `nyaa → dmhy → bitsearch → 1337x → torrentgalaxy → ext_to → knaben → solidtorrents → btdig → torrentcsv → idope` (noise-filtered, no tpb)
+- Software: pan sources first, then `torrentmac → fitgirl → torrentgalaxy → bitsearch → tpb → 1337x → limetorrents → torlock → ext_to → knaben → solidtorrents → btdig → torrentcsv → glodls → idope`
 - General: pan sources first, all torrent sources
 
 ## Capability profile notes

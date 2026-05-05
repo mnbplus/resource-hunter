@@ -5,6 +5,7 @@ import urllib.parse
 from xml.etree import ElementTree
 from .base import HTTPClient, SourceAdapter, _clean_magnet
 from ..common import extract_share_id, normalize_title, parse_quality_tags, quality_display_from_tags
+from ..exceptions import SourceNetworkError, SourceParseError, SourceUnavailableError
 from ..models import SearchIntent, SearchResult
 
 
@@ -29,17 +30,17 @@ class TorznabSource(SourceAdapter):
         try:
             payload = http_client.get_text(url)
         except Exception as exc:
-            raise RuntimeError(f"torznab request failed: {exc}") from exc
+            raise SourceNetworkError(f"torznab request failed: {exc}", source=self.name, url=url) from exc
             
         try:
             root = ElementTree.fromstring(payload)
         except ElementTree.ParseError as exc:
-            raise RuntimeError(f"torznab invalid XML: {exc}") from exc
+            raise SourceParseError(f"torznab invalid XML: {exc}", source=self.name, url=url) from exc
 
         # Check for Torznab error
         error_node = root.find("error")
         if error_node is not None:
-            raise RuntimeError(f"torznab server error: {error_node.get('description', 'unknown')}")
+            raise SourceUnavailableError(f"torznab server error: {error_node.get('description', 'unknown')}", source=self.name, url=url)
 
         results: list[SearchResult] = []
         for item in root.findall("./channel/item")[: max(limit * 3, 20)]:

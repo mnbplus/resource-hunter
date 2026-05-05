@@ -11,6 +11,7 @@ Configure via environment variables:
 from __future__ import annotations
 import os
 from .base import HTTPClient, SourceAdapter, _flatten_pan_payload
+from ..exceptions import SourceNetworkError, SourceUnavailableError
 from ..models import SearchIntent, SearchResult
 
 
@@ -39,7 +40,7 @@ class PanSouSource(SourceAdapter):
 
         try:
             payload = http_client.post_json(url, json_data=payload_data, headers=headers)
-        except RuntimeError as exc:
+        except Exception as exc:
             err = str(exc)
             if "401" in err or "403" in err:
                 import logging
@@ -47,8 +48,8 @@ class PanSouSource(SourceAdapter):
                     "pansou auth failed (HTTP %s) — check PANSOU_API_TOKEN in .env",
                     "401" if "401" in err else "403",
                 )
-                return []
-            raise
+                raise SourceUnavailableError(f"pansou auth failed: {exc}", source=self.name, url=url) from exc
+            raise SourceNetworkError(str(exc), source=self.name, url=url) from exc
 
         if not isinstance(payload, dict):
             return []

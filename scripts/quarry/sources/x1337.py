@@ -14,7 +14,7 @@ class OneThreeThreeSevenXSource(SourceAdapter):
     channel = "torrent"
     priority = 3
 
-    MIRRORS = ["www.1377x.to", "www.1337x.to", "1337x.st", "x1337x.ws"]
+    MIRRORS = ("www.1377x.to", "www.1337x.to", "1337x.st", "x1337x.ws")
 
     SEARCH_ROW_RE = re.compile(
         r'<a href="(?P<detail>/torrent/[^"]+)"[^>]*>(?P<title>[^<]+)</a>.*?'
@@ -32,18 +32,14 @@ class OneThreeThreeSevenXSource(SourceAdapter):
         except Exception:
             return None
 
-    def _try_mirror(self, query: str, page: int, http_client: HTTPClient) -> tuple[str, str]:
-        last_error = "all mirrors failed"
-        for mirror in self.MIRRORS:
-            url = f"https://{mirror}/search/{urllib.parse.quote(query)}/{page}/"
-            try:
-                return mirror, http_client.get_text(url)
-            except Exception as exc:
-                last_error = str(exc)
-        raise RuntimeError(last_error)
-
     def search(self, query: str, intent: SearchIntent, limit: int, page: int, http_client: HTTPClient) -> list[SearchResult]:
-        base_domain, payload = self._try_mirror(query, page, http_client)
+        path = f"/search/{urllib.parse.quote(query)}/{page}/"
+        payload = http_client.get_text_with_mirrors(self.name, self.MIRRORS, path)
+        # Determine which mirror succeeded for detail page fetches
+        from ..mirror_health import get_mirror_tracker
+        tracker = get_mirror_tracker()
+        ordered = tracker.ordered_mirrors(self.name, self.MIRRORS)
+        base_domain = ordered[0] if ordered else self.MIRRORS[0]
         candidates: list[tuple[str, str, str, int]] = []
         for match in self.SEARCH_ROW_RE.finditer(payload):
             detail_path = html.unescape(match.group("detail"))

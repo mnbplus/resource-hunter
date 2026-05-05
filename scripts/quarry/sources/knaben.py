@@ -14,6 +14,7 @@ from typing import Any
 
 from .base import HTTPClient, SourceAdapter, _clean_magnet, _format_size, _make_magnet
 from ..common import extract_share_id, normalize_title, parse_quality_tags, quality_display_from_tags
+from ..exceptions import SourceNetworkError, SourceParseError
 from ..models import SearchIntent, SearchResult
 
 # Knaben category IDs (from their API docs)
@@ -56,15 +57,15 @@ class KnabenSource(SourceAdapter):
                 headers={"Content-Type": "application/json"},
                 timeout=12,
             )
-        except RuntimeError:
-            return []
+        except Exception as exc:
+            raise SourceNetworkError(str(exc), source=self.name, url="https://api.knaben.org/v1") from exc
 
         if not isinstance(response, dict):
-            return []
+            raise SourceParseError("unexpected response type", source=self.name, url="https://api.knaben.org/v1")
 
         hits = response.get("hits", [])
         if not isinstance(hits, list):
-            return []
+            raise SourceParseError("hits field is not a list", source=self.name, url="https://api.knaben.org/v1")
 
         results: list[SearchResult] = []
         for item in hits:

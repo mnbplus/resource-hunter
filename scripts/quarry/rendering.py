@@ -168,6 +168,13 @@ def format_benchmark_text(payload: dict[str, Any]) -> str:
 
 
 def search_response_to_v2(response: dict[str, Any]) -> dict[str, Any]:
+    """Convert a v3 response to v2 format for backward compatibility.
+
+    .. deprecated:: 1.1.0
+        No known callers. Will be removed in a future version.
+    """
+    import warnings
+    warnings.warn("search_response_to_v2 is deprecated and will be removed in v1.5.0", DeprecationWarning, stacklevel=2)
     return {
         "query": response["query"],
         "intent": response["intent"],

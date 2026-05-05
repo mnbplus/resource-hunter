@@ -5,6 +5,7 @@ import urllib.parse
 from xml.etree import ElementTree
 from .base import HTTPClient, SourceAdapter, _make_magnet
 from ..common import extract_share_id, normalize_title, parse_quality_tags, quality_display_from_tags
+from ..exceptions import SourceNetworkError, SourceParseError
 from ..models import SearchIntent, SearchResult
 
 
@@ -17,28 +18,22 @@ class LimeTorrentsSource(SourceAdapter):
     channel = "torrent"
     priority = 3
 
-    MIRRORS = [
+    MIRRORS = (
         "www.limetorrents.lol",
         "www.limetorrents.fun",
         "www.limetorrents.cc",
-    ]
+    )
 
     def search(self, query: str, intent: SearchIntent, limit: int, page: int, http_client: HTTPClient) -> list[SearchResult]:
         encoded = urllib.parse.quote(query)
-        payload: str | None = None
-        last_err = ""
-        for mirror in self.MIRRORS:
-            url = f"https://{mirror}/searchrss/{encoded}/"
-            try:
-                payload = http_client.get_text(url)
-                if payload and "<?xml" in payload[:100]:
-                    break  # Valid XML response
-                payload = None  # HTML error page, try next mirror
-            except Exception as exc:
-                last_err = str(exc)
-                continue
-        if not payload:
-            return []
+        path = f"/searchrss/{encoded}/"
+        try:
+            payload = http_client.get_text_with_mirrors(self.name, self.MIRRORS, path)
+        except Exception as exc:
+            raise SourceNetworkError(str(exc), source=self.name) from exc
+
+        if not payload or len(payload) < 100:
+            raise SourceParseError("RSS feed empty or too short", source=self.name)
 
         try:
             root = ElementTree.fromstring(payload)

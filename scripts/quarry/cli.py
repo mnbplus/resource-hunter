@@ -71,15 +71,31 @@ def _format_doctor_text(payload: dict[str, Any]) -> str:
         lines.append("Recent video manifests:")
         for item in payload["video"]["recent_manifests"]:
             lines.append(f"- {item.get('task_id', '-')}: {item.get('url')} [{item.get('preset') or item.get('lang') or '-'}]")
+
+    # Mirror health
+    mh = payload.get("mirror_health", {})
+    if mh:
+        lines.append("")
+        lines.append("Mirror health:")
+        for source, info in mh.items():
+            healthy = info.get("healthy", 0)
+            total = info.get("total", 0)
+            lines.append(f"  {source}: {healthy}/{total} healthy")
+            for m in info.get("mirrors", []):
+                status = "✓" if m["ok"] else "✗"
+                backoff = f" (backoff {m['backoff_remaining_s']}s)" if m.get("in_backoff") else ""
+                lines.append(f"    {status} {m['mirror']} {m['latency_ms']}ms{backoff}")
+
     return "\n".join(lines)
 
 
 def _search(engine: ResourceHunterEngine, args: argparse.Namespace) -> int:
+    fast = getattr(args, "fast", False)
     intent = parse_intent(
         query=args.query,
         explicit_kind=_resolve_kind(args),
         channel=_resolve_channel(args),
-        quick=args.quick,
+        quick=args.quick or fast,
         wants_sub=args.sub,
         wants_4k=args.uhd,
     )
@@ -91,14 +107,32 @@ def _search(engine: ResourceHunterEngine, args: argparse.Namespace) -> int:
         else:
             print(format_video_text(payload, "probe"))
         return 0
-    response = engine.search(intent, plan=build_plan(intent), page=args.page, limit=args.limit, use_cache=not args.no_cache, probe_links=not args.no_probe)
+    limit = min(args.limit, 5) if fast else args.limit
+    probe = False if fast else (not args.no_probe)
+    max_sources = 6 if fast else 0  # 0 = unlimited
+    response = engine.search(intent, plan=build_plan(intent), page=args.page, limit=limit, use_cache=not args.no_cache, probe_links=probe, max_sources=max_sources)
+    # Post-search filtering
+    min_seeders = getattr(args, "min_seeders", 0)
+    provider_filter = [p.strip().lower() for p in getattr(args, "provider", "").split(",") if p.strip()]
+    if min_seeders or provider_filter:
+        filtered = []
+        for r in response.get("results", []):
+            if min_seeders and r.get("channel") == "torrent" and (r.get("seeders") or 0) < min_seeders:
+                continue
+            if provider_filter and r.get("provider", "").lower() not in provider_filter:
+                continue
+            filtered.append(r)
+        response["results"] = filtered
+        response["meta"]["filtered"] = True
+        response["meta"]["filter_min_seeders"] = min_seeders
+        response["meta"]["filter_provider"] = provider_filter or None
     if args.json:
         if args.json_version == 2:
             print(dump_json(search_response_to_v2(response)))
         else:
             print(dump_json(response))
     else:
-        print(format_search_text(response, max_results=min(args.limit, 4) if args.quick else args.limit))
+        print(format_search_text(response, max_results=min(limit, 4) if (args.quick or fast) else limit))
     return 0
 
 
@@ -120,6 +154,8 @@ def _doctor(engine: ResourceHunterEngine, args: argparse.Namespace) -> int:
         "upyunso", "panhunt", "nyaa", "dmhy", "bangumi_moe", "subsplease",
         "eztv", "torrentgalaxy", "bitsearch", "tpb", "yts", "1337x",
         "limetorrents", "torlock", "fitgirl", "torrentmac", "ext_to", "annas",
+        "knaben", "btdig", "solidtorrents",
+        "libgen", "torrentcsv", "glodls", "idope",
     }
     _TOKEN_SOURCES = {
         "ps.252035": "PANSOU_TOKEN",
@@ -153,6 +189,14 @@ def _doctor(engine: ResourceHunterEngine, args: argparse.Namespace) -> int:
             "provider_count": len(_PROVIDER_PROBERS),
         },
     }
+    # Add mirror health if any mirrors have been tracked
+    try:
+        from .mirror_health import get_mirror_tracker
+        mh_summary = get_mirror_tracker().summary()
+        if mh_summary:
+            payload["mirror_health"] = mh_summary
+    except Exception:
+        pass
     if args.json:
         print(dump_json(payload))
     else:
@@ -327,6 +371,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_search.add_argument("--json-version", choices=[2, 3], type=int, default=3)
     p_search.add_argument("--no-cache", action="store_true")
     p_search.add_argument("--no-probe", action="store_true", help="Skip pan link viability probing")
+    p_search.add_argument("--fast", action="store_true", help="Fast mode: top 6 sources, no probe, limit 5")
+    p_search.add_argument("--min-seeders", type=int, default=0, help="Minimum seeders for torrent results")
+    p_search.add_argument("--provider", type=str, default="", help="Comma-separated provider filter (e.g. aliyun,quark)")
 
     p_sources = sub.add_parser("sources", help="Show configured resource sources")
     p_sources.add_argument("--probe", action="store_true")
@@ -379,13 +426,55 @@ def build_parser() -> argparse.ArgumentParser:
     p_cache.add_argument("cache_cmd", choices=["cleanup", "stats"], nargs="?", default="stats")
     p_cache.add_argument("--max-age", type=int, default=86400, help="Max age in seconds for cleanup")
     p_cache.add_argument("--json", action="store_true")
+
+    p_history = sub.add_parser("history", help="View search history")
+    p_history.add_argument("--limit", type=int, default=20, help="Number of entries to show")
+    p_history.add_argument("--json", action="store_true")
+    p_history.add_argument("--export", choices=["csv", "markdown"], default=None, help="Export format")
     return parser
+
+
+def _history(engine: ResourceHunterEngine, args: argparse.Namespace) -> int:
+    history = engine.cache.list_history(limit=args.limit)
+    if args.json:
+        print(dump_json({"schema_version": "3", "history": history}))
+        return 0
+    if args.export == "csv":
+        import csv
+        import io
+        output = io.StringIO()
+        if history:
+            writer = csv.DictWriter(output, fieldnames=list(history[0].keys()))
+            writer.writeheader()
+            writer.writerows(history)
+        print(output.getvalue())
+        return 0
+    if args.export == "markdown":
+        if not history:
+            print("No search history.")
+            return 0
+        print("| Query | Kind | Channel | Results | Top Source | Time |")
+        print("|:------|:-----|:--------|--------:|:-----------|:-----|")
+        for h in history:
+            print(f"| {h['query']} | {h['kind']} | {h['channel']} | {h['result_count']} | {h['top_source']} | {h['searched_at'][:19]} |")
+        return 0
+    # Default text format
+    if not history:
+        print("No search history.")
+        return 0
+    print(f"Recent searches ({len(history)} entries):")
+    print()
+    for h in history:
+        ts = h['searched_at'][:19].replace('T', ' ')
+        results = h['result_count']
+        print(f"  [{ts}] \"{h['query']}\" → {results} results ({h['kind']}/{h['channel']}) top={h['top_source'] or '-'}")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     ensure_utf8_stdio()
     argv = list(argv if argv is not None else sys.argv[1:])
-    if argv and argv[0] not in {"search", "sources", "doctor", "video", "benchmark", "cache", "subtitle"}:
+    if argv and argv[0] not in {"search", "sources", "doctor", "video", "benchmark", "cache", "subtitle", "history"}:
         argv = ["search"] + argv
 
     parser = build_parser()
@@ -408,6 +497,8 @@ def main(argv: list[str] | None = None) -> int:
             return _subtitle(args)
         if args.command == "cache":
             return _cache(engine, args)
+        if args.command == "history":
+            return _history(engine, args)
     except RuntimeError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

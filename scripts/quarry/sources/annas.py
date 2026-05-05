@@ -24,6 +24,7 @@ from ..common import (
     parse_quality_tags,
     quality_display_from_tags,
 )
+from ..exceptions import SourceNetworkError
 from ..models import SearchIntent, SearchResult
 
 _MIRRORS = [
@@ -128,7 +129,7 @@ class AnnasArchiveSource(SourceAdapter):
             except Exception:
                 continue
 
-        return []
+        raise SourceNetworkError("all mirrors exhausted", source=self.name)
 
     def _parse_results(self, html: str, limit: int) -> list[SearchResult]:
         """Parse search result page HTML."""

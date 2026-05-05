@@ -16,6 +16,7 @@ from typing import Any
 
 from .base import HTTPClient, SourceAdapter, _clean_magnet, _format_size, _make_magnet
 from ..common import extract_share_id, normalize_title, parse_quality_tags, quality_display_from_tags
+from ..exceptions import SourceNetworkError, SourceParseError
 from ..models import SearchIntent, SearchResult
 
 # SolidTorrents category mapping
@@ -34,37 +35,24 @@ class SolidTorrentsSource(SourceAdapter):
     channel = "torrent"
     priority = 3  # backup/enhancement layer
 
-    MIRRORS = [
+    MIRRORS = (
         "solidtorrents.to",
         "solidtorrents.net",
         "solidtorrents.eu",
-        "bitsearch.to",  # shares backend infra with bitsearch
-    ]
-
-    def _try_api(self, query: str, page: int, category: str, http_client: HTTPClient) -> tuple[str, dict[str, Any]]:
-        """Try JSON API endpoints across mirrors."""
-        last_error = "all endpoints failed"
-
-        # Try the SolidTorrents API format
-        for mirror in self.MIRRORS[:3]:
-            skip = (page - 1) * 20
-            url = f"https://{mirror}/api/v1/search?q={urllib.parse.quote(query)}&category={category}&skip={skip}&sort=seeders&order=desc&fuv=yes"
-            try:
-                result = http_client.get_json(url, timeout=10)
-                if isinstance(result, dict) and "results" in result:
-                    return mirror, result
-            except Exception as exc:
-                last_error = str(exc)
-
-        raise RuntimeError(last_error)
+    )
 
     def search(self, query: str, intent: SearchIntent, limit: int, page: int, http_client: HTTPClient) -> list[SearchResult]:
         category = _KIND_TO_CATEGORY.get(intent.kind, "all")
+        skip = (page - 1) * 20
+        path = f"/api/v1/search?q={urllib.parse.quote(query)}&category={category}&skip={skip}&sort=seeders&order=desc&fuv=yes"
 
         try:
-            _, response = self._try_api(query, page, category, http_client)
-        except RuntimeError:
+            response = http_client.get_json_with_mirrors(self.name, self.MIRRORS, path, timeout=10)
+        except Exception:
             # Fallback to HTML scraping if API is down
+            return self._scrape_fallback(query, page, limit, http_client)
+
+        if not isinstance(response, dict):
             return self._scrape_fallback(query, page, limit, http_client)
 
         items = response.get("results", [])

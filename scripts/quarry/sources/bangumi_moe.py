@@ -7,6 +7,7 @@ from __future__ import annotations
 import urllib.parse
 from .base import HTTPClient, SourceAdapter, TRACKERS, _clean_magnet, _format_size
 from ..common import extract_share_id, normalize_title, parse_quality_tags, quality_display_from_tags
+from ..exceptions import SourceNetworkError, SourceParseError, SourceUnavailableError
 from ..models import SearchIntent, SearchResult
 
 
@@ -30,19 +31,18 @@ class BangumiMoeSource(SourceAdapter):
 
         try:
             resp = http_client.post_json(url, json_data=payload_data, headers=headers)
-        except RuntimeError as exc:
+        except Exception as exc:
             err = str(exc)
             if "500" in err or "502" in err or "503" in err:
-                # Server-side errors — bangumi.moe can be flaky
-                return []
-            raise RuntimeError(f"bangumi_moe request failed: {exc}") from exc
+                raise SourceUnavailableError(f"bangumi_moe server error: {exc}", source=self.name, url=url) from exc
+            raise SourceNetworkError(f"bangumi_moe request failed: {exc}", source=self.name, url=url) from exc
 
         if not isinstance(resp, dict):
-            return []
+            raise SourceParseError("unexpected response type", source=self.name, url=url)
 
         torrents = resp.get("torrents", [])
         if not isinstance(torrents, list):
-            return []
+            raise SourceParseError("torrents field is not a list", source=self.name, url=url)
 
         results: list[SearchResult] = []
         for item in torrents[: max(limit * 3, 12)]:

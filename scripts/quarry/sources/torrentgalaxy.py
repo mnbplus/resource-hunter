@@ -39,12 +39,12 @@ class TorrentGalaxySource(SourceAdapter):
     channel = "torrent"
     priority = 2
 
-    MIRRORS = [
+    MIRRORS = (
         "torrentgalaxy.one",
         "torrentgalaxy.to",
         "torrentgalaxy.hair",
         "torrentgalaxy.info",
-    ]
+    )
 
     _KIND_TO_CATEGORY = {
         "movie": "c3=1&c46=1&c45=1&c42=1&c4=1&c1=1",
@@ -55,20 +55,11 @@ class TorrentGalaxySource(SourceAdapter):
         "book": "c13=1&c19=1",
     }
 
-    def _try_mirror(self, query: str, page: int, intent: SearchIntent, http_client: HTTPClient) -> tuple[str, str]:
+    def search(self, query: str, intent: SearchIntent, limit: int, page: int, http_client: HTTPClient) -> list[SearchResult]:
         cat_params = self._KIND_TO_CATEGORY.get(intent.kind, "")
         cat_suffix = f"&{cat_params}" if cat_params else ""
-        last_error = "all mirrors failed"
-        for mirror in self.MIRRORS:
-            url = f"https://{mirror}/torrents.php?search={urllib.parse.quote(query)}&sort=seeders&order=desc&page={page - 1}{cat_suffix}"
-            try:
-                return mirror, http_client.get_text(url)
-            except Exception as exc:
-                last_error = str(exc)
-        raise RuntimeError(last_error)
-
-    def search(self, query: str, intent: SearchIntent, limit: int, page: int, http_client: HTTPClient) -> list[SearchResult]:
-        _, payload = self._try_mirror(query, page, intent, http_client)
+        path = f"/torrents.php?search={urllib.parse.quote(query)}&sort=seeders&order=desc&page={page - 1}{cat_suffix}"
+        payload = http_client.get_text_with_mirrors(self.name, self.MIRRORS, path)
 
         results: list[SearchResult] = []
         blocks = _ROW_SPLIT_RE.split(payload)

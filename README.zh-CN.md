@@ -1,4 +1,4 @@
-<p align="center">
+﻿<p align="center">
   🇨🇳 简体中文 | <a href="README.md">🇺🇸 English</a>
 </p>
 
@@ -9,9 +9,9 @@
 </div>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.2.0-d4af37?style=for-the-badge" alt="版本 1.2.0">
+  <img src="https://img.shields.io/badge/version-1.1.0-d4af37?style=for-the-badge" alt="版本 1.1.0">
   <img src="https://img.shields.io/badge/python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=fff" alt="Python 3.10+">
-  <img src="https://img.shields.io/badge/benchmark-pass-10b981?style=for-the-badge" alt="基准通过">
+  <img src="https://img.shields.io/badge/sources-28-10b981?style=for-the-badge" alt="28 个源">
   <img src="https://img.shields.io/badge/零配置-true-0ea5e9?style=for-the-badge" alt="零配置">
   <img src="https://img.shields.io/badge/license-MIT--0-111111?style=for-the-badge" alt="MIT-0 许可">
 </p>
@@ -22,7 +22,7 @@
 
 Quarry 是一个**资源发现引擎**，设计用于被 AI Agent（Hermes、OpenClaw 等）调用。
 
-它不负责下载——它**搜索**最佳公共路由（网盘链接、磁力 URI、电子书页面），跨 24 个源进行排序、验证存活性，返回结构化 JSON。
+它不负责下载——它**搜索**最佳公共路由（网盘链接、磁力 URI、电子书页面），跨 28 个源进行排序、验证存活性，返回结构化 JSON。
 
 ```
 用户："帮我找 Oppenheimer 4K 资源"
@@ -41,13 +41,13 @@ Agent 翻译 → hunt.py search "Oppenheimer 2023" --4k --json
 
 ### 🔍 多源聚合
 
-24 个源适配器，覆盖 3 个通道：
+28 个源适配器，覆盖 3 个通道：
 
 | 通道 | 源 | 覆盖范围 |
 |:-----|:---|:---------|
 | **网盘** | upyunso, pansou, ps.252035, panhunt | 阿里云盘、夸克、百度网盘、115、PikPak、蓝奏等 |
-| **种子** | torznab, nyaa, dmhy, bangumi_moe, eztv, torrentgalaxy, bitsearch, tpb, yts, 1337x, limetorrents, torlock, fitgirl, torrentmac, ext_to, subsplease, knaben, btdig, solidtorrents | 电影、剧集、动漫、游戏、音乐、macOS 应用 |
-| **电子书** | annas (Anna's Archive) | PDF、EPUB、MOBI — 文学与非文学 |
+| **种子** | torznab, nyaa, dmhy, bangumi_moe, eztv, torrentgalaxy, bitsearch, tpb, yts, 1337x, limetorrents, torlock, fitgirl, torrentmac, ext_to, subsplease, knaben, btdig, solidtorrents, torrentcsv, glodls, idope | 电影、剧集、动漫、游戏、音乐、macOS 应用、DHT 网络 |
+| **电子书** | annas (Anna's Archive), libgen (Library Genesis) | PDF、EPUB、MOBI — 文学、非文学、学术论文 |
 
 ### 📊 智能排序
 
@@ -254,12 +254,12 @@ flowchart LR
 
 | 分类 | 主力 → 备选 | 关键信号 |
 |:-----|:------------|:---------|
-| 电影 | 网盘 → YTS/TorrentGalaxy/TPB → 1337x | 年份匹配 |
-| 剧集 | EZTV/TorrentGalaxy/TPB → 网盘 | S{XX}E{XX} |
-| 动漫 | Nyaa/DMHY/Bangumi Moe → 网盘 | 罗马音标题 |
-| 电子书 | **Anna's Archive** → 网盘 → 1337x/TorLock | 格式（pdf/epub） |
-| 音乐 | 网盘 → DMHY/Nyaa（过滤噪声） | 无损标签 |
-| 软件 | 网盘 → FitGirl/TorrentMac/TorrentGalaxy | 平台提示 |
+| 电影 | 网盘 → YTS/TorrentGalaxy/TPB → 1337x → TorrentCSV/GLODLS/iDope | 年份匹配 |
+| 剧集 | EZTV/TorrentGalaxy/TPB → 网盘 → TorrentCSV/GLODLS/iDope | S{XX}E{XX} |
+| 动漫 | Nyaa/DMHY/Bangumi Moe → 网盘 → TorrentCSV/iDope | 罗马音标题 |
+| 电子书 | **Anna's Archive** → **Libgen** → 网盘 → 1337x/TorLock | 格式（pdf/epub） |
+| 音乐 | 网盘 → DMHY/Nyaa（过滤噪声）→ TorrentCSV/iDope | 无损标签 |
+| 软件 | 网盘 → FitGirl/TorrentMac/TorrentGalaxy → GLODLS/iDope | 平台提示 |
 
 ---
 
@@ -288,6 +288,10 @@ quarry/
 │           ├── torlock.py         # TorLock 已验证种子
 │           ├── ext_to.py          # EXT.to 现代磁力搜索
 │           ├── annas.py           # Anna's Archive 电子书（HTML 爬虫）
+│           ├── libgen.py          # Library Genesis 电子书/论文（HTML 爬虫，多镜像）
+│           ├── torrentcsv.py      # TorrentCSV DHT 种子（JSON API）
+│           ├── glodls.py          # GLODLS 综合种子索引（HTML 爬虫）
+│           ├── idope.py           # iDope DHT 种子搜索（HTML 爬虫）
 │           └── ...                # eztv, bitsearch, tpb, yts, 1337x 等
 ├── agents/
 │   ├── hermes.yaml                # Hermes Agent 技能配置

@@ -14,6 +14,7 @@ import urllib.parse
 
 from .base import HTTPClient, SourceAdapter, _clean_magnet
 from ..common import extract_share_id, normalize_title, parse_quality_tags, quality_display_from_tags
+from ..exceptions import SourceNetworkError
 from ..models import SearchIntent, SearchResult
 
 # BTDigg search results are rendered in a simple list format
@@ -38,26 +39,18 @@ class BTDiggSource(SourceAdapter):
     channel = "torrent"
     priority = 3  # backup DHT source
 
-    MIRRORS = [
+    MIRRORS = (
         "btdig.com",
         "btdig.net",
-    ]
-
-    def _try_search(self, query: str, page: int, http_client: HTTPClient) -> tuple[str, str]:
-        last_error = "all mirrors failed"
-        for mirror in self.MIRRORS:
-            url = f"https://{mirror}/search?q={urllib.parse.quote(query)}&p={page - 1}&order=0"
-            try:
-                return mirror, http_client.get_text(url, timeout=10)
-            except Exception as exc:
-                last_error = str(exc)
-        raise RuntimeError(last_error)
+    )
 
     def search(self, query: str, intent: SearchIntent, limit: int, page: int, http_client: HTTPClient) -> list[SearchResult]:
+        import urllib.parse as _urlparse
+        path = f"/search?q={_urlparse.quote(query)}&p={page - 1}&order=0"
         try:
-            _, payload = self._try_search(query, page, http_client)
-        except RuntimeError:
-            return []
+            payload = http_client.get_text_with_mirrors(self.name, self.MIRRORS, path, timeout=10)
+        except Exception as exc:
+            raise SourceNetworkError(str(exc), source=self.name, url=path) from exc
 
         results: list[SearchResult] = []
 

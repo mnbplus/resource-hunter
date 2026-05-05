@@ -6,6 +6,7 @@ or header ordering checks.  We force urllib to avoid this.
 from __future__ import annotations
 import os
 from .base import HTTPClient, SourceAdapter, _flatten_pan_payload
+from ..exceptions import SourceNetworkError, SourceUnavailableError
 from ..models import SearchIntent, SearchResult
 
 
@@ -36,12 +37,12 @@ class Ps252035Source(SourceAdapter):
         urllib_client._use_cffi = False
         try:
             payload = urllib_client.post_json(url, json_data=payload_data, headers=headers)
-        except RuntimeError as exc:
+        except Exception as exc:
             if "401" in str(exc):
                 import logging
                 logging.getLogger(__name__).warning("ps.252035 auth rejected (HTTP 401) — may be transient; if persistent, update PANSOU_TOKEN in .env")
-                return []
-            raise
+                raise SourceUnavailableError(f"ps.252035 auth rejected: {exc}", source=self.name, url=url) from exc
+            raise SourceNetworkError(str(exc), source=self.name, url=url) from exc
         finally:
             urllib_client.close()
         if not isinstance(payload, dict):

@@ -226,6 +226,15 @@ def source_priority(source_name: str) -> int:
         "ext_to": 3,
         "annas": 2,
         "subsplease": 1,
+        # DHT backup sources
+        "knaben": 3,
+        "btdig": 4,
+        "solidtorrents": 4,
+        # Book / DHT sources
+        "libgen": 2,
+        "torrentcsv": 3,
+        "glodls": 4,
+        "idope": 4,
     }
     return priorities.get((source_name or "").lower(), 9)
 

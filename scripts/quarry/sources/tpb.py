@@ -12,9 +12,13 @@ class TPBSource(SourceAdapter):
     channel = "torrent"
     priority = 2
 
+    MIRRORS = (
+        "apibay.org",
+    )
+
     def search(self, query: str, intent: SearchIntent, limit: int, page: int, http_client: HTTPClient) -> list[SearchResult]:
-        url = f"https://apibay.org/q.php?q={urllib.parse.quote(query)}&cat=0"
-        payload = http_client.get_json(url)
+        path = f"/q.php?q={urllib.parse.quote(query)}&cat=0"
+        payload = http_client.get_json_with_mirrors(self.name, self.MIRRORS, path)
         if not isinstance(payload, list):
             return []
         results: list[SearchResult] = []

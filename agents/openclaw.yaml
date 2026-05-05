@@ -40,10 +40,12 @@ instructions: |
      - `tier`: "top" = high confidence, "related" = decent match, "risky" = unreliable
      - `penalties`: watch for "dead link detected" (pan probe found a dead share)
      - For book results from "annas" source: the link_or_magnet is an Anna's Archive detail page URL
+     - For book results from "libgen" source: the link_or_magnet is a Library Genesis download page URL
 
   Available commands:
     hunt.py search "<query>" [--kind movie|tv|anime|music|software|book] [--json]
     hunt.py search "<query>" --no-probe [--json]   # skip pan link viability check (faster)
+    hunt.py subtitle "<title>" [--lang zh,en] [--season N] [--episode N] [--download] [--json]
     hunt.py sources [--probe] [--json]
     hunt.py doctor [--json]
     hunt.py video info|probe|download|subtitle <url> [--json]
@@ -53,9 +55,10 @@ instructions: |
   Category-specific guidance:
     - Movie/TV/Anime: pan links are probed for viability; dead links auto-demoted
     - Anime: uses Nyaa, DMHY, Bangumi Moe, SubsPlease as primary sources
-    - Book: uses Anna's Archive as primary source; prefer --book flag for ebook queries
+    - Book: uses Anna's Archive and Libgen as primary sources; prefer --book flag for ebook queries
     - Music: uses noise-filtered torrent sources (Nyaa, DMHY); pan links prioritized for Chinese artists
     - Software: routes to FitGirl (PC games), TorrentMac (macOS), TorrentGalaxy, and general trackers
+    - DHT backup: TorrentCSV, GLODLS, iDope provide broad fallback coverage for all categories
 
   Key behaviors:
     - All output defaults to human-readable text; add --json for structured data

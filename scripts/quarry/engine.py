@@ -13,6 +13,7 @@ from .pan_probe import PanLinkProber
 from .benchmark import run_benchmark_suite
 from .cache import ResourceCache
 from .config import DEFAULT_CONFIG, RankingConfig
+from .exceptions import SourceError, SourceNetworkError, SourceParseError, SourceRateLimitError, SourceUnavailableError
 from .intent import AliasResolver, build_plan, enrich_intent_with_aliases
 from .models import SearchIntent, SearchPlan, SearchResult, SourceStatus
 from .ranking import deduplicate_results, diversify_results, score_result, source_health, source_is_degraded
@@ -30,8 +31,24 @@ def _load_local_config() -> RankingConfig:
     return DEFAULT_CONFIG
 
 
-def _classify_failure_kind(error: str) -> str:
-    lowered = (error or "").lower()
+def _classify_failure_kind(error: str | Exception) -> str:
+    """Classify a failure for health tracking.
+
+    Supports both structured SourceError subtypes and legacy string matching.
+    """
+    # Structured exception classification (preferred)
+    if isinstance(error, SourceRateLimitError):
+        return "rate_limit"
+    if isinstance(error, SourceUnavailableError):
+        return "http_5xx"
+    if isinstance(error, SourceNetworkError):
+        return "network"
+    if isinstance(error, SourceParseError):
+        return "parse"
+    if isinstance(error, SourceError):
+        return "source_error"
+    # Legacy string matching for sources that still throw RuntimeError
+    lowered = (str(error) if error else "").lower()
     if lowered.startswith("http 4"):
         return "http_4xx"
     if lowered.startswith("http 5"):
@@ -64,7 +81,7 @@ class ResourceHunterEngine:
         alias_resolution = self.alias_resolver.resolve(intent, self.cache, self.http_client)
         return enrich_intent_with_aliases(intent, alias_resolution)
 
-    def _cache_key(self, intent: SearchIntent, plan: SearchPlan, page: int, limit: int) -> str:
+    def _cache_key(self, intent: SearchIntent, plan: SearchPlan, page: int, limit: int, probe_links: bool = True) -> str:
         payload = json.dumps(
             {
                 "schema_version": "3",
@@ -72,6 +89,7 @@ class ResourceHunterEngine:
                 "plan": plan.to_dict(),
                 "page": page,
                 "limit": limit,
+                "probe_links": probe_links,
             },
             sort_keys=True,
             ensure_ascii=False,
@@ -161,7 +179,7 @@ class ResourceHunterEngine:
                     status.ok = False
                     status.latency_ms = int((time.time() - started) * 1000)
                     status.error = str(exc)[:200]
-                    status.failure_kind = _classify_failure_kind(status.error)
+                    status.failure_kind = _classify_failure_kind(exc)
                     status.degraded = profile.default_degraded or degraded_before
                     status.degraded_reason = status.failure_kind or "request_failure"
                     status.recovery_state = "recovering" if status.degraded else "degraded"
@@ -199,10 +217,11 @@ class ResourceHunterEngine:
         limit: int = 8,
         use_cache: bool = True,
         probe_links: bool = True,
+        max_sources: int = 0,
     ) -> dict[str, Any]:
         intent = self._resolve_aliases(intent)
         plan = plan or build_plan(intent)
-        cache_key = self._cache_key(intent, plan, page, limit)
+        cache_key = self._cache_key(intent, plan, page, limit, probe_links=probe_links)
         if use_cache:
             cached = self.cache.get_search_cache(cache_key)
             if cached:
@@ -220,13 +239,19 @@ class ResourceHunterEngine:
             for channel in plan.channels:
                 queries = plan.pan_queries if channel == "pan" else plan.torrent_queries
                 ordered_sources = self._ordered_sources(channel, plan, intent)
+                if max_sources > 0:
+                    ordered_sources = ordered_sources[:max_sources]
                 for source in ordered_sources:
                     future = executor.submit(self._search_source, source, channel, queries, intent, page, limit)
                     all_futures.append((channel, future))
             for channel, future in all_futures:
-                status, source_results = future.result()
-                statuses.append(status)
-                results.extend(source_results)
+                try:
+                    status, source_results = future.result()
+                    statuses.append(status)
+                    results.extend(source_results)
+                except Exception as exc:
+                    import logging
+                    logging.getLogger(__name__).warning("source future failed: %s", exc)
 
         scored = [score_result(result, intent, cache=self.cache) for result in results]
         deduped = deduplicate_results(scored)
@@ -281,6 +306,7 @@ class ResourceHunterEngine:
         response = {
             "schema_version": "3",
             "query": intent.original_query,
+            "summary": _build_summary(intent, ordered, warnings),
             "intent": intent.to_dict(),
             "plan": plan.to_dict(),
             "results": [result.to_public_dict() for result in ordered],
@@ -298,8 +324,21 @@ class ResourceHunterEngine:
                 "resolved_titles": intent.resolved_titles,
                 "resolved_year": intent.resolved_year or intent.year,
                 "retry_info": retry_info if retry_info else None,
+                "fast_mode": max_sources > 0,
             },
         }
+        # Record search in persistent history
+        try:
+            top_source = ordered[0].source if ordered else ""
+            self.cache.record_search(
+                query=intent.original_query,
+                kind=intent.kind,
+                channel=",".join(plan.channels),
+                result_count=len(ordered),
+                top_source=top_source,
+            )
+        except Exception:
+            pass  # never block search on history recording
         if use_cache:
             self.cache.set_search_cache(cache_key, response, ttl_seconds=300)
         return response
@@ -405,6 +444,63 @@ class ResourceHunterEngine:
                 )
 
         return warnings
+
+
+def _build_summary(intent: SearchIntent, results: list[SearchResult], warnings: list[str]) -> str:
+    """Generate a natural-language summary of search results for AI agents.
+
+    This lets agents present results to users without deeply parsing the JSON.
+    """
+    if not results:
+        parts = [f'No results found for "{intent.original_query}"']
+        if intent.kind not in ("general",):
+            parts.append(f" (category: {intent.kind})")
+        parts.append(". Try alternative English titles or simplify the query.")
+        return "".join(parts)
+
+    top_results = [r for r in results if r.tier == "top"]
+    related_results = [r for r in results if r.tier == "related"]
+    total_confident = len(top_results) + len(related_results)
+
+    if not total_confident:
+        return f'Found {len(results)} results for "{intent.original_query}" but none with high confidence. Results may be unreliable.'
+
+    # Build quality description
+    quality_set: set[str] = set()
+    source_set: set[str] = set()
+    provider_set: set[str] = set()
+    best = top_results[0] if top_results else related_results[0]
+    for r in (top_results + related_results)[:8]:
+        if r.quality:
+            quality_set.add(r.quality.split()[0])  # e.g. "2160p" from "2160p BluRay REMUX"
+        source_set.add(r.source)
+        if r.provider:
+            provider_set.add(r.provider)
+
+    parts = [f'Found {total_confident} confident result{"s" if total_confident != 1 else ""}']
+    if top_results:
+        parts.append(f" ({len(top_results)} top-tier)")
+    parts.append(f' for "{intent.original_query}"')
+
+    if quality_set:
+        parts.append(f". Available quality: {', '.join(sorted(quality_set, reverse=True))}")
+    parts.append(f". Best match: \"{best.title}\" via {best.source}")
+    if best.channel == "pan" and best.provider:
+        parts.append(f" ({best.provider})")
+    if best.seeders and best.channel == "torrent":
+        parts.append(f" ({best.seeders} seeders)")
+
+    # Alive/dead link info for pan
+    alive_count = sum(1 for r in top_results + related_results if r.source_health.get("link_alive") is True)
+    dead_count = sum(1 for r in top_results + related_results if r.source_health.get("link_alive") is False)
+    if alive_count:
+        parts.append(f". {alive_count} link{'s' if alive_count != 1 else ''} verified alive")
+    if dead_count:
+        parts.append(f", {dead_count} dead link{'s' if dead_count != 1 else ''} filtered")
+
+    parts.append(".")
+    return "".join(parts)
+
 
 
 def _simplify_query(query: str) -> str:

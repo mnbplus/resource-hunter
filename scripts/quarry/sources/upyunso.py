@@ -20,6 +20,7 @@ import urllib.request
 import uuid
 from .base import HTTPClient, SourceAdapter
 from ..common import normalize_title, parse_quality_tags, quality_display_from_tags
+from ..exceptions import SourceNetworkError, SourceRateLimitError
 from ..models import SearchIntent, SearchResult
 
 try:
@@ -220,7 +221,7 @@ class UpyunsoSource(SourceAdapter):
         try:
             resp = http_client.get_json(url)
         except Exception as exc:
-            raise RuntimeError(f"upyunso request failed: {exc}") from exc
+            raise SourceNetworkError(f"upyunso request failed: {exc}", source=self.name, url=url) from exc
 
         resp = _decrypt_response(resp)  # type: ignore[arg-type]
 
@@ -319,7 +320,7 @@ def _resolve_link(rid: str, token: str, http_client: HTTPClient) -> str:
 
     try:
         resp = http_client.get_json(url)
-    except RuntimeError as exc:
+    except Exception as exc:
         err = str(exc)
         if "401" in err:
             logger.debug("upyunso link 401 for rid=%s — token expired", rid)
@@ -327,9 +328,6 @@ def _resolve_link(rid: str, token: str, http_client: HTTPClient) -> str:
         if "429" in err:
             logger.debug("upyunso link 429 for rid=%s — quota exhausted", rid)
             return "__rate_limited__"
-        logger.debug("upyunso link failed for rid=%s: %s", rid, exc)
-        return ""
-    except Exception as exc:
         logger.debug("upyunso link failed for rid=%s: %s", rid, exc)
         return ""
 

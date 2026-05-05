@@ -59,6 +59,10 @@ from .subsplease import SubsPleaseSource
 from .knaben import KnabenSource
 from .btdig import BTDiggSource
 from .solidtorrents import SolidTorrentsSource
+from .libgen import LibgenSource
+from .torrentcsv import TorrentCSVSource
+from .glodls import GLODLSSource
+from .idope import IDOPESource
 
 
 class SourceRegistry:
@@ -90,7 +94,7 @@ class SourceRegistry:
         else:
             _logger.warning("upyunso disabled: pycryptodome / pycryptodomex not installed (pip install pycryptodome)")
             self._pan = [PanSouSource(), Ps252035Source(), PanhuntSource()]
-        self._torrent = [TorznabSource(), NyaaSource(), DMHYSource(), BangumiMoeSource(), SubsPleaseSource(), EZTVSource(), TorrentGalaxySource(), BitsearchSource(), TPBSource(), YTSSource(), OneThreeThreeSevenXSource(), LimeTorrentsSource(), TorLockSource(), FitGirlSource(), TorrentMacSource(), ExtToSource(), AnnasArchiveSource(), KnabenSource(), BTDiggSource(), SolidTorrentsSource()]
+        self._torrent = [TorznabSource(), NyaaSource(), DMHYSource(), BangumiMoeSource(), SubsPleaseSource(), EZTVSource(), TorrentGalaxySource(), BitsearchSource(), TPBSource(), YTSSource(), OneThreeThreeSevenXSource(), LimeTorrentsSource(), TorLockSource(), FitGirlSource(), TorrentMacSource(), ExtToSource(), AnnasArchiveSource(), KnabenSource(), BTDiggSource(), SolidTorrentsSource(), LibgenSource(), TorrentCSVSource(), GLODLSSource(), IDOPESource()]
 
     def _load_local_sources(self) -> None:
         """Auto-discover custom source adapters from ``local/sources/``."""
@@ -163,8 +167,11 @@ __all__ = [
     "EZTVSource",
     "ExtToSource",
     "FitGirlSource",
+    "GLODLSSource",
     "HTTPClient",
+    "IDOPESource",
     "KnabenSource",
+    "LibgenSource",
     "LimeTorrentsSource",
     "NyaaSource",
     "OneThreeThreeSevenXSource",
@@ -180,6 +187,7 @@ __all__ = [
     "TPBSource",
     "TRACKERS",
     "TorLockSource",
+    "TorrentCSVSource",
     "TorrentGalaxySource",
     "TorznabSource",
     "TorrentMacSource",

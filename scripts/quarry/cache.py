@@ -78,6 +78,16 @@ class ResourceCache:
                     created_at real not null,
                     expires_at real not null
                 );
+                create table if not exists search_history (
+                    id integer primary key autoincrement,
+                    query text not null,
+                    kind text not null default 'general',
+                    channel text not null default 'both',
+                    result_count integer not null default 0,
+                    top_source text not null default '',
+                    searched_at text not null,
+                    searched_epoch real not null
+                );
                 """
             )
             self._ensure_column(conn, "source_status", "degraded_reason", "degraded_reason text not null default ''")
@@ -294,5 +304,49 @@ class ResourceCache:
             video_cutoff = now - max_age_seconds * 7
             cursor = conn.execute("delete from video_manifest where created_at < ?", (video_cutoff,))
             deleted["video_manifest"] = cursor.rowcount
+            history_cutoff = now - max_age_seconds * 30  # keep history 30x longer
+            cursor = conn.execute("delete from search_history where searched_epoch < ?", (history_cutoff,))
+            deleted["search_history"] = cursor.rowcount
         return deleted
+
+    # -- Search history -------------------------------------------------------
+
+    def record_search(
+        self,
+        query: str,
+        kind: str = "general",
+        channel: str = "both",
+        result_count: int = 0,
+        top_source: str = "",
+    ) -> None:
+        """Record a search query for history tracking."""
+        import datetime
+        now = time.time()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                insert into search_history
+                (query, kind, channel, result_count, top_source, searched_at, searched_epoch)
+                values (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    query, kind, channel, result_count, top_source,
+                    datetime.datetime.fromtimestamp(now, tz=datetime.timezone.utc).isoformat(),
+                    now,
+                ),
+            )
+
+    def list_history(self, limit: int = 20) -> list[dict[str, Any]]:
+        """Return recent search history, newest first."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                select query, kind, channel, result_count, top_source, searched_at
+                from search_history
+                order by id desc
+                limit ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
 

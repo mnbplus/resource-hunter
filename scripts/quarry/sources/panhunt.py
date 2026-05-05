@@ -2,6 +2,7 @@
 from __future__ import annotations
 import os
 from .base import HTTPClient, SourceAdapter, _flatten_pan_payload
+from ..exceptions import SourceUnavailableError
 from ..models import SearchIntent, SearchResult
 
 
@@ -29,6 +30,6 @@ class PanhuntSource(SourceAdapter):
             return []
         
         if payload.get("code") == "AUTH_TOKEN_MISSING" or payload.get("error"):
-            raise RuntimeError(f"panhunt auth error: {payload.get('error', 'unknown')}")
+            raise SourceUnavailableError(f"panhunt auth error: {payload.get('error', 'unknown')}", source=self.name, url=url)
             
         return _flatten_pan_payload(payload, self.name)
