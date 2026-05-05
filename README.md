@@ -171,6 +171,26 @@ local/
 └── .env              # Override environment variables (takes priority over root .env)
 ```
 
+
+### Optional: Token-Based Sources
+
+25 of 28 sources work out of the box. 3 optional sources need credentials for extra coverage:
+
+| Source | Env Variable | How to Get |
+|:-------|:-------------|:-----------|
+| **ps.252035 / panhunt** | `PANSOU_TOKEN` | Register at [linux.do](https://linux.do), login at [so.252035.xyz](https://so.252035.xyz), copy JWT from browser cookies |
+| **pansou** (self-hosted) | `PANSOU_API_URL` | Deploy [fish2018/pansou](https://github.com/fish2018/pansou), set your instance URL |
+| **torznab** (Jackett) | `TORZNAB_URL` + `TORZNAB_APIKEY` | Install [Jackett](https://github.com/Jackett/Jackett), copy API key from dashboard |
+
+Add credentials to `.env` or `local/.env`:
+
+```env
+PANSOU_TOKEN=eyJhbGciOiJIUzI1NiIs...
+TORZNAB_URL=http://localhost:9117/api/v2.0/indexers/all/results/torznab
+TORZNAB_APIKEY=your-api-key
+```
+
+> See [`references/sources.md`](./references/sources.md#how-to-obtain-tokens) for detailed step-by-step instructions.
 > Custom source adapters, ranking tweaks, and env variables in `local/` are **update-proof** �?`git pull` and ZIP updates both leave this directory untouched.
 
 ---

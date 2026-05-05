@@ -171,6 +171,26 @@ local/
 └── .env              # 覆盖环境变量（优先级高于根目录 .env）
 ```
 
+
+### 可选：需要 Token 的源
+
+28 个源中有 25 个开箱即用。3 个可选源需要凭据以获得额外覆盖：
+
+| 源 | 环境变量 | 获取方式 |
+|:---|:---------|:---------|
+| **ps.252035 / panhunt** | `PANSOU_TOKEN` | 在 [linux.do](https://linux.do) 注册，前往 [so.252035.xyz](https://so.252035.xyz) 登录，从浏览器 Cookie 复制 JWT |
+| **pansou**（自建） | `PANSOU_API_URL` | 部署 [fish2018/pansou](https://github.com/fish2018/pansou)，设置实例 URL |
+| **torznab**（Jackett） | `TORZNAB_URL` + `TORZNAB_APIKEY` | 安装 [Jackett](https://github.com/Jackett/Jackett)，从控制台复制 API Key |
+
+将凭据添加到 `.env` 或 `local/.env`：
+
+```env
+PANSOU_TOKEN=eyJhbGciOiJIUzI1NiIs...
+TORZNAB_URL=http://localhost:9117/api/v2.0/indexers/all/results/torznab
+TORZNAB_APIKEY=your-api-key
+```
+
+> 详细获取步骤请参阅 [`references/sources.md`](./references/sources.md#how-to-obtain-tokens)。
 > `local/` 中的自定义源适配器、排序调整和环境变量都是**更新安全的** — `git pull` 和 ZIP 更新都不会触碰这个目录。
 
 ---

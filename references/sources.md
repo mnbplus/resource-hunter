@@ -201,6 +201,52 @@
 | `TORZNAB_APIKEY` | torznab | Yes (when using torznab) |
 | `HTTP_PROXY` / `HTTPS_PROXY` | HTTPClient | Optional (needed for CN servers) |
 
+### How to obtain tokens
+
+Place these in your project root `.env` file or `local/.env` (higher priority).
+
+#### PANSOU_TOKEN (ps.252035 + panhunt)
+
+1. Visit [linux.do](https://linux.do) and register/log in
+2. Go to [https://so.252035.xyz](https://so.252035.xyz)
+3. Click "Linux.do 登录" to authorize via your linux.do account
+4. After login, open browser DevTools (F12) → Application → Cookies
+5. Copy the `token` cookie value (it is a JWT starting with `eyJ...`)
+6. Add to `.env`:
+   ```
+   PANSOU_TOKEN=eyJhbGciOiJIUzI1NiIs...
+   ```
+7. Token expiration: ~7 days. Re-login to refresh when expired.
+
+#### PANSOU_API_URL + PANSOU_API_TOKEN (self-hosted pansou)
+
+Only needed if you run your own PanSou instance ([github.com/fish2018/pansou](https://github.com/fish2018/pansou)).
+
+1. Deploy PanSou on your server (Docker or bare metal)
+2. Note the base URL of your instance (e.g. `https://so.example.com`)
+3. If `AUTH_ENABLED=true` in your PanSou config, also copy the auth token
+4. Add to `.env`:
+   ```
+   PANSOU_API_URL=https://so.example.com
+   PANSOU_API_TOKEN=your-auth-token  # only if AUTH_ENABLED=true
+   ```
+
+#### TORZNAB_URL + TORZNAB_APIKEY (Jackett / Prowlarr)
+
+Torznab is the standard API used by [Jackett](https://github.com/Jackett/Jackett) and [Prowlarr](https://github.com/Prowlarr/Prowlarr) to expose 500+ private/public trackers through a unified interface.
+
+1. Install Jackett or Prowlarr on your server
+2. Open the web UI (default: `http://localhost:9117` for Jackett)
+3. Add and configure the indexers (trackers) you want
+4. Copy the **API Key** from the top-right of the Jackett dashboard
+5. The Torznab endpoint URL is: `http://localhost:9117/api/v2.0/indexers/all/results/torznab`
+6. Add to `.env`:
+   ```
+   TORZNAB_URL=http://localhost:9117/api/v2.0/indexers/all/results/torznab
+   TORZNAB_APIKEY=your-jackett-api-key
+   ```
+7. For Prowlarr: use `http://localhost:9696/{indexer-id}/api?apikey=...` format
+
 ## Pan link viability probing
 
 - Pan search results (`top` / `related` tier) are automatically probed for link viability
