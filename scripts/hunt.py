@@ -32,7 +32,7 @@ from quarry._cleanup import purge_deprecated
 
 _removed = purge_deprecated()
 if _removed:
-    print(f"🧹 Cleaned {len(_removed)} deprecated file(s) from a previous version:", file=sys.stderr)
+    print(f"Cleaned {len(_removed)} deprecated file(s) from a previous version:", file=sys.stderr)
     for _f in _removed:
         print(f"   removed: {_f}", file=sys.stderr)
 
@@ -41,4 +41,3 @@ from quarry.cli import main
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

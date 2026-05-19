@@ -58,6 +58,7 @@ class SourceStatus:
     channel: str
     priority: int
     ok: bool
+    kind: str = "general"
     skipped: bool = False
     degraded: bool = False
     degraded_reason: str = ""

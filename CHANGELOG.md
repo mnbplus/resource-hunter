@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.2.0
+
+### Security
+
+- Default TLS certificate validation is now strict for HTTP source requests.
+- Added per-source `lenient_tls` runtime profiles for sources with known non-standard TLS behavior.
+
+### Improvements
+
+- `local/config.json` can now override source runtime profiles via `source_runtime_profiles`.
+- Pan link probing now reports `unknown` when a page loads without a positive share signal instead of marking the link alive.
+- Agent-facing documentation now describes CJK handling accurately: agents should translate first, while the engine keeps a best-effort alias fallback for movie/TV/anime/general queries.
+- Source health now records per-kind 24h success rate, median latency, result yield, confident result count, top-hit rate, and recommended query budget.
+- Search scheduling now uses cached source-health metrics conservatively to prefer stronger sources and reduce query variants for weak sources.
+- `search --explain` adds an agent-readable ranking explanation with `why_top` and `why_not_others`.
+- `source validate local/sources/my_source.py` validates custom SourceAdapter files before they are used.
+- `source validate` now fails invalid adapters when smoke search or adapter initialization fails.
+- Cache cleanup now prunes old `source_result_metrics` rows.
+- Cleaned corrupted replacement characters from the English README.
+
+### Documentation
+
+- Synchronized version metadata to 1.2.0.
+- Updated repository and issue URLs to `taffy-owo/quarry`.
+- Cleaned stale source-count references.
+
 ## 1.1.0
 
 ### New Sources

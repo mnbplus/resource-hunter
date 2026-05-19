@@ -81,7 +81,15 @@ class ResourceHunterEngine:
         alias_resolution = self.alias_resolver.resolve(intent, self.cache, self.http_client)
         return enrich_intent_with_aliases(intent, alias_resolution)
 
-    def _cache_key(self, intent: SearchIntent, plan: SearchPlan, page: int, limit: int, probe_links: bool = True) -> str:
+    def _cache_key(
+        self,
+        intent: SearchIntent,
+        plan: SearchPlan,
+        page: int,
+        limit: int,
+        probe_links: bool = True,
+        explain: bool = False,
+    ) -> str:
         payload = json.dumps(
             {
                 "schema_version": "3",
@@ -90,6 +98,7 @@ class ResourceHunterEngine:
                 "page": page,
                 "limit": limit,
                 "probe_links": probe_links,
+                "explain": explain,
             },
             sort_keys=True,
             ensure_ascii=False,
@@ -110,10 +119,35 @@ class ResourceHunterEngine:
         return sorted(
             catalog,
             key=lambda item: (
-                preferred.get(item.name, 999) + (100 if source_is_degraded(self.cache, item.name) else 0),
+                preferred.get(item.name, 999)
+                + (100 if source_is_degraded(self.cache, item.name) else 0)
+                + self._adaptive_source_rank(item, intent.kind),
                 item.priority,
             ),
         )
+
+    def _adaptive_source_rank(self, source: SourceAdapter, kind: str) -> float:
+        metrics = self.cache.source_health_metrics(source.name, kind=kind)
+        if not metrics.get("attempts_24h"):
+            return 0.0
+        success_rate = metrics.get("success_rate_24h")
+        latency = metrics.get("median_latency_ms")
+        result_yield = float(metrics.get("result_yield") or 0)
+        top_hit_rate = float(metrics.get("top_hit_rate") or 0)
+        success_component = float(success_rate) if success_rate is not None else 0.5
+        latency_penalty = min(float(latency or 2500) / 2500, 1.0)
+        health_score = (success_component * 3.0) + result_yield + (top_hit_rate * 2.0) - latency_penalty
+        capped_score = max(-3.0, min(8.0, health_score))
+        return -capped_score
+
+    def _query_budget_for_source(self, source_name: str, kind: str, profile_budget: int, degraded: bool) -> int:
+        if degraded:
+            return 1
+        metrics = self.cache.source_health_metrics(source_name, kind=kind)
+        if not metrics.get("attempts_24h") and not metrics.get("result_yield"):
+            return profile_budget
+        recommended = int(metrics.get("recommended_query_budget") or 1)
+        return max(1, min(profile_budget, recommended))
 
     def _search_source(
         self,
@@ -130,6 +164,7 @@ class ResourceHunterEngine:
         if self.cache.should_skip_source(source.name, profile.cooldown_seconds, profile.failure_threshold):
             status = SourceStatus(
                 source=source.name,
+                kind=intent.kind,
                 channel=channel,
                 priority=source.priority,
                 ok=False,
@@ -146,6 +181,7 @@ class ResourceHunterEngine:
 
         status = SourceStatus(
             source=source.name,
+            kind=intent.kind,
             channel=channel,
             priority=source.priority,
             ok=True,
@@ -156,8 +192,17 @@ class ResourceHunterEngine:
             last_success_epoch=current_health.get("last_success_epoch"),
         )
         results: list[SearchResult] = []
-        client = HTTPClient(retries=profile.retries, default_timeout=profile.timeout)
-        query_budget = 1 if (profile.default_degraded or degraded_before) else profile.query_budget
+        client = HTTPClient(
+            retries=profile.retries,
+            default_timeout=profile.timeout,
+            lenient_tls=profile.lenient_tls,
+        )
+        query_budget = self._query_budget_for_source(
+            source.name,
+            intent.kind,
+            profile.query_budget,
+            profile.default_degraded or degraded_before,
+        )
         try:
             for query in queries[:query_budget]:
                 if not query:
@@ -218,10 +263,11 @@ class ResourceHunterEngine:
         use_cache: bool = True,
         probe_links: bool = True,
         max_sources: int = 0,
+        explain: bool = False,
     ) -> dict[str, Any]:
         intent = self._resolve_aliases(intent)
         plan = plan or build_plan(intent)
-        cache_key = self._cache_key(intent, plan, page, limit, probe_links=probe_links)
+        cache_key = self._cache_key(intent, plan, page, limit, probe_links=probe_links, explain=explain)
         if use_cache:
             cached = self.cache.get_search_cache(cache_key)
             if cached:
@@ -258,6 +304,7 @@ class ResourceHunterEngine:
         if probe_links:
             deduped = self._probe_pan_results(deduped)
         ordered = diversify_results(deduped)
+        self._record_result_metrics(intent, statuses, ordered)
         suppressed = [
             {
                 "title": item.title,
@@ -289,7 +336,7 @@ class ResourceHunterEngine:
                 retry_plan = build_plan(retry_intent)
                 retry_response = self.search(
                     retry_intent, retry_plan, page=1, limit=limit,
-                    use_cache=use_cache, probe_links=probe_links,
+                    use_cache=use_cache, probe_links=probe_links, explain=explain,
                 )
                 if retry_response.get("results"):
                     retry_response.setdefault("meta", {})
@@ -327,6 +374,8 @@ class ResourceHunterEngine:
                 "fast_mode": max_sources > 0,
             },
         }
+        if explain:
+            response["explain"] = build_explain(ordered, suppressed)
         # Record search in persistent history
         try:
             top_source = ordered[0].source if ordered else ""
@@ -352,9 +401,16 @@ class ResourceHunterEngine:
             if probe:
                 profile = profile_for(adapter.name)
                 started = time.time()
-                ok, error = adapter.healthcheck(HTTPClient(retries=profile.retries, default_timeout=profile.timeout))
+                ok, error = adapter.healthcheck(
+                    HTTPClient(
+                        retries=profile.retries,
+                        default_timeout=profile.timeout,
+                        lenient_tls=profile.lenient_tls,
+                    )
+                )
                 status = SourceStatus(
                     source=adapter.name,
+                    kind="general",
                     channel=adapter.channel,
                     priority=adapter.priority,
                     ok=ok,
@@ -379,6 +435,12 @@ class ResourceHunterEngine:
                 }
             else:
                 latest_health = source_health(self.cache, adapter.name)
+            profile_kinds = list(profile_for(adapter.name).supported_kinds)
+            metrics_by_kind = [
+                self.cache.source_health_metrics(adapter.name, kind=kind)
+                for kind in profile_kinds
+            ]
+            metrics = self.cache.source_health_metrics(adapter.name, kind="general")
             sources.append(
                 {
                     "source": adapter.name,
@@ -397,12 +459,40 @@ class ResourceHunterEngine:
                         "failure_kind": latest_health.get("failure_kind", ""),
                         "checked_at": status_info.get("checked_at"),
                     },
+                    "health_metrics": metrics,
+                    "health_metrics_by_kind": metrics_by_kind,
                 }
             )
         return {"schema_version": "3", "sources": sources, "meta": {"probe": probe}}
 
     def run_benchmark(self) -> dict[str, Any]:
         return run_benchmark_suite()
+
+    def _record_result_metrics(
+        self,
+        intent: SearchIntent,
+        statuses: list[SourceStatus],
+        results: list[SearchResult],
+    ) -> None:
+        top_result = next((item for item in results if item.tier == "top"), results[0] if results else None)
+        by_source: dict[str, list[SearchResult]] = {}
+        for result in results:
+            by_source.setdefault(result.source, []).append(result)
+        channel_by_source = {status.source: status.channel for status in statuses}
+        for status in statuses:
+            source_results = by_source.get(status.source, [])
+            confident_count = sum(1 for item in source_results if item.tier in {"top", "related"})
+            try:
+                self.cache.record_source_result_metrics(
+                    source=status.source,
+                    kind=intent.kind,
+                    channel=channel_by_source.get(status.source, status.channel),
+                    result_count=len(source_results),
+                    confident_count=confident_count,
+                    top_hit=bool(top_result and top_result.source == status.source),
+                )
+            except Exception:
+                pass
 
     # -- zero-config intelligence -----------------------------------------
 
@@ -502,6 +592,45 @@ def _build_summary(intent: SearchIntent, results: list[SearchResult], warnings: 
     return "".join(parts)
 
 
+def build_explain(results: list[SearchResult], suppressed: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build an agent-readable explanation layer from scored results."""
+    confident = [item for item in results if item.tier in {"top", "related"}]
+    best = confident[0] if confident else (results[0] if results else None)
+    why_top: list[str] = []
+    if best:
+        why_top.extend(best.reasons[:8])
+        if best.source_health.get("link_alive") is True:
+            why_top.append("pan link verified alive")
+        elif best.source_health.get("link_alive") is False:
+            why_top.append("pan link detected dead")
+        if best.source_degraded:
+            why_top.append("source is currently degraded")
+        else:
+            why_top.append("source not degraded")
+        if best.match_bucket:
+            why_top.append(f"match bucket: {best.match_bucket}")
+    why_not_others: list[str] = []
+    for item in results:
+        if best is not None and item is best:
+            continue
+        if item.penalties:
+            why_not_others.append(f"{item.title} demoted: {', '.join(item.penalties[:3])}")
+        elif item.tier == "risky":
+            why_not_others.append(f"{item.title} suppressed: {item.match_bucket}")
+        if len(why_not_others) >= 8:
+            break
+    for suppressed_item in suppressed:
+        title = str(suppressed_item.get("title", "candidate"))
+        reason = str(suppressed_item.get("reason", "risky"))
+        why_not_others.append(f"{title} suppressed: {reason}")
+        if len(why_not_others) >= 8:
+            break
+    return {
+        "why_top": why_top,
+        "why_not_others": why_not_others,
+    }
+
+
 
 def _simplify_query(query: str) -> str:
     """Progressively simplify a query for auto-retry.
@@ -525,4 +654,4 @@ def _simplify_query(query: str) -> str:
     return simplified
 
 
-__all__ = ["ResourceHunterEngine", "build_plan", "source_health", "source_is_degraded"]
+__all__ = ["ResourceHunterEngine", "build_explain", "build_plan", "source_health", "source_is_degraded"]

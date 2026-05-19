@@ -1,6 +1,6 @@
 ---
 name: quarry
-version: 1.1.0
+version: 1.2.0
 description: >-
   Use when finding public download routes for movies, TV, anime, music,
   software, or books. Searches pan/torrent/book sources with quality-aware
@@ -47,6 +47,7 @@ SKILL_DIR="$(openclaw skills path quarry)/scripts"
 
 # Search
 python3 "$SKILL_DIR/hunt.py" search "Oppenheimer 2023" --4k --json
+python3 "$SKILL_DIR/hunt.py" search "Oppenheimer 2023" --4k --json --explain
 python3 "$SKILL_DIR/hunt.py" search "The Boys S05E03" --tv
 python3 "$SKILL_DIR/hunt.py" search "Kamiina Botan" --anime
 python3 "$SKILL_DIR/hunt.py" search "Jay Chou Fantasy FLAC" --music
@@ -68,13 +69,14 @@ python3 "$SKILL_DIR/hunt.py" sources --probe --json
 python3 "$SKILL_DIR/hunt.py" doctor --json
 python3 "$SKILL_DIR/hunt.py" cache stats --json
 python3 "$SKILL_DIR/hunt.py" benchmark
+python3 "$SKILL_DIR/hunt.py" source validate local/sources/my_source.py --json
 ```
 
 ## Procedure
 
 Follow this exact order for every resource search request:
 
-1. **Translate the query to English.** The engine only matches against English release titles. CJK titles will fail silently.
+1. **Translate the query to English first.** Most upstream release titles are indexed in English or romanized form, so agent-side translation gives the best recall. The engine also has a best-effort alias fallback for CJK movie/TV/anime/general queries, but it is not guaranteed.
    - `黑袍纠察队` → `The Boys`
    - `梦魇绝镇` → `FROM`
    - `三体` → `3 Body Problem` or `Three Body Problem`
@@ -99,10 +101,11 @@ Follow this exact order for every resource search request:
    - `source_health.link_alive`: `true` = verified active, `false` = dead (skip it), `null` = unknown
    - `confidence`: 0.0–1.0 match score
    - `penalties`: if contains `"dead link detected"`, do not recommend
+   - `explain.why_top` / `explain.why_not_others`: available when search is run with `--explain`
    - Book results from `annas` source: `link_or_magnet` is a detail page URL (user visits to choose download)
    - Book results from `libgen` source: `link_or_magnet` is a Library Genesis download page URL
 
-5. **Handle "No confident match"**: try alternative English titles or shortened names before reporting failure.
+5. **Handle "No confident match"**: try alternative English titles, romanized titles, or shortened names before reporting failure.
 
 6. **For public video URLs**: skip search entirely, go straight to `video probe` or `video info`.
 
@@ -148,7 +151,9 @@ Only `top` and `related` tiers are shown. Risky recall is suppressed.
       "canonical_identity": "movie:oppenheimer:2023"
     }
   ],
-  "source_status": { "active": 15, "degraded": 0 }
+  "source_status": [
+    { "source": "yts", "ok": true, "degraded": false, "latency_ms": 820 }
+  ]
 }
 ```
 
@@ -160,9 +165,28 @@ Only `top` and `related` tiers are shown. Risky recall is suppressed.
 | `match_bucket` | `exact_title_family`, `title_family_match`, `weak_context_match`, etc. |
 | `canonical_identity` | Deduplication key (e.g., `movie:oppenheimer:2023`) |
 
+### Explanation Mode
+
+Use `--explain` when the agent needs to justify its recommendation to the user:
+
+```bash
+python3 "$SKILL_DIR/hunt.py" search "Oppenheimer 2023" --json --explain
+```
+
+The JSON response may include:
+
+```json
+{
+  "explain": {
+    "why_top": ["exact title-family match", "year matched 2023"],
+    "why_not_others": ["candidate X demoted: dead pan link"]
+  }
+}
+```
+
 ## Risks and Misuse
 
-- **Searching with untranslated CJK titles.** The engine does NOT translate internally. Agent MUST translate first.
+- **Relying only on untranslated CJK titles.** The engine can attempt public metadata alias resolution for CJK movie/TV/anime/general queries, but Agent-side English or romanized translation remains the primary path.
 - **Recommending dead pan links.** Always check `source_health.link_alive` before presenting to user. Skip `false` results.
 - **Triggering for login-only or private resources.** This skill only handles public routes. Do not attempt private trackers.
 - **Using this skill for legal advice.** This skill finds routes, not legal opinions.
@@ -188,6 +212,7 @@ When the user asks to add custom sources, change scoring, or set API keys:
 - Custom source adapters: `local/sources/my_source.py` (auto-discovered on startup)
 - Ranking weight overrides: `local/config.json`
 - Environment variables: `local/.env` (overrides root `.env`)
+- Validate custom adapters with `hunt.py source validate local/sources/my_source.py --json`
 - **Never modify files in `scripts/quarry/`** for user-specific customizations
 - Read `CONTRIBUTING.md` for the full adapter contract and examples
 

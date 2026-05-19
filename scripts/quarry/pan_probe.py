@@ -168,9 +168,9 @@ def _probe_baidu(url: str) -> ProbeResult:
         if pattern in lowered:
             return ProbeResult(alive=True, reason="share page active", title="")
 
-    # If page loaded without dead indicators, assume probably alive
+    # A loaded page without positive share indicators is not enough proof of liveness.
     if len(text) > 500:
-        return ProbeResult(alive=True, reason="page loaded (no dead signals)", title="")
+        return ProbeResult(alive=None, reason="page loaded without positive share signal", title="")
 
     return ProbeResult(alive=None, reason="ambiguous page", title="")
 
@@ -218,9 +218,10 @@ def _probe_lanzou(url: str) -> ProbeResult:
         if pattern in snippet:
             return ProbeResult(alive=True, reason="share page active", title="")
 
-    # If page loaded with reasonable content, cautiously mark as alive
+    # A generic HTML page can be an anti-bot/interstitial page, so keep it unknown
+    # unless one of the explicit alive indicators above is present.
     if len(text) > 500:
-        return ProbeResult(alive=True, reason="page loaded (no dead signals)", title="")
+        return ProbeResult(alive=None, reason="page loaded without positive share signal", title="")
 
     return ProbeResult(alive=None, reason="ambiguous page", title="")
 
@@ -257,7 +258,7 @@ def _probe_tianyi(url: str) -> ProbeResult:
         if "不存在" in text[:1000] or "已过期" in text[:1000] or "已取消" in text[:1000]:
             return ProbeResult(alive=False, reason="page dead signal", title="")
         if len(text) > 500:
-            return ProbeResult(alive=True, reason="page loaded", title="")
+            return ProbeResult(alive=None, reason="page loaded without positive share signal", title="")
         return ProbeResult(alive=None, reason="non-json response", title="")
 
     # JSON response — check status

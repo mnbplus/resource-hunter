@@ -1,11 +1,11 @@
 {
-  "owner": "mnbplus",
+  "owner": "taffy-owo",
   "slug": "quarry",
   "displayName": "Quarry",
   "latest": {
-    "version": "1.1.0",
-    "publishedAt": 1745560274000,
-    "commit": "https://github.com/mnbplus/quarry/commit/caf7957b6bcc673e537ca3d9c162e68c31bc8e45"
+    "version": "1.2.0",
+    "publishedAt": 1777790393000,
+    "commit": "https://github.com/taffy-owo/quarry/commit/574343efd8919938359ba5fc8675390b7de91f93"
   },
   "history": []
 }

@@ -37,9 +37,17 @@ class MyTrackerSource(SourceAdapter):
         return []
 ```
 
+Validate your adapter before using it in normal searches:
+
+```bash
+python scripts/hunt.py source validate local/sources/my_tracker.py --json
+```
+
+The validator checks the adapter class, `name`/`channel`/`priority`, `search()` signature, smoke-test return type, required result fields, and whether returned results used the provided `http_client`.
+
 ## Config Overrides
 
-Create `local/config.json` to override ranking weights without editing source code:
+Create `local/config.json` to override ranking weights and source runtime profiles without editing source code:
 
 ```json
 {
@@ -48,9 +56,23 @@ Create `local/config.json` to override ranking weights without editing source co
   "pan_provider_scores": {
     "aliyun": 15,
     "quark": 14
+  },
+  "source_runtime_profiles": {
+    "mytracker": {
+      "supported_kinds": ["movie", "tv", "general"],
+      "timeout": 12,
+      "retries": 1,
+      "cooldown_seconds": 180,
+      "failure_threshold": 2,
+      "query_budget": 2,
+      "degraded_score_penalty": 4,
+      "lenient_tls": false
+    }
   }
 }
 ```
+
+Set `lenient_tls` to `true` only for a source with known non-standard TLS behavior.
 
 ## Environment Variables
 

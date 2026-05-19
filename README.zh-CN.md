@@ -9,7 +9,7 @@
 </div>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.1.0-d4af37?style=for-the-badge" alt="版本 1.1.0">
+  <img src="https://img.shields.io/badge/version-1.2.0-d4af37?style=for-the-badge" alt="版本 1.2.0">
   <img src="https://img.shields.io/badge/python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=fff" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/sources-28-10b981?style=for-the-badge" alt="28 个源">
   <img src="https://img.shields.io/badge/零配置-true-0ea5e9?style=for-the-badge" alt="零配置">
@@ -100,7 +100,7 @@ hunt.py subtitle "Breaking Bad" --season 1 --episode 1 --lang zh,en --json
 ## 快速开始
 
 ```bash
-git clone https://github.com/mnbplus/quarry.git
+git clone https://github.com/taffy-owo/quarry.git
 cd quarry
 
 # 基础搜索无需任何依赖
@@ -117,6 +117,7 @@ pip install curl-cffi                # TLS 指纹伪装
 ```bash
 # 电影
 python3 scripts/hunt.py search "Oppenheimer 2023" --4k --json
+python3 scripts/hunt.py search "Oppenheimer 2023" --4k --json --explain
 
 # 剧集
 python3 scripts/hunt.py search "Breaking Bad S05E16" --tv
@@ -141,9 +142,10 @@ python3 scripts/hunt.py search "Interstellar 2014" --no-probe
 
 ```bash
 python3 scripts/hunt.py sources --probe --json    # 源健康检查
-python3 scripts/hunt.py doctor --json              # 系统诊断
+python3 scripts/hunt.py doctor --json              # 系统诊断 + source_health 指标
 python3 scripts/hunt.py benchmark                  # 离线精度基准
 python3 scripts/hunt.py cache stats --json         # 缓存统计
+python3 scripts/hunt.py source validate local/sources/my_source.py --json
 ```
 
 ### 如何更新
@@ -170,6 +172,14 @@ local/
 ├── config.json       # 覆盖排序权重
 └── .env              # 覆盖环境变量（优先级高于根目录 .env）
 ```
+
+在正式使用自定义源前，建议先验证适配器契约：
+
+```bash
+python3 scripts/hunt.py source validate local/sources/my_tracker.py --json
+```
+
+`doctor --json` 还会输出自适应源健康指标，例如 `success_rate_24h`、`median_latency_ms`、`result_yield`、`top_hit_rate` 和 `recommended_query_budget`。Quarry 会保守使用这些缓存指标，优先调度表现好的源，并降低弱源或近期失败源的 query budget。
 
 
 ### 可选：需要 Token 的源
@@ -216,12 +226,16 @@ Agent 配置文件在 `agents/` 目录下：
 [`SKILL.md`](./SKILL.md) 是 Agent 可读的技能契约：
 
 - **何时使用**：公共资源发现、版本比较、视频探测
-- **查询规范化**：Agent 必须先翻译成英文再搜索
+- **查询规范化**：Agent 应优先翻译成英文或罗马音；引擎会对中文电影/剧集/动漫/通用查询做 best-effort 别名回退
 - **结果解读**：如何读取 `link_alive`、`tier`、`penalties`
 - **分类路由**：每种内容类型优先使用哪些源
 - **13 条 Agent 规则**：排序、回退、格式提示
 
 ### JSON v3 输出
+
+```bash
+python3 scripts/hunt.py search "Oppenheimer 2023" --json --explain
+```
 
 ```json
 {
@@ -236,6 +250,17 @@ Agent 配置文件在 `agents/` 目录下：
       "canonical_identity": "movie:oppenheimer:2023"
     }
   ]
+}
+```
+
+加上 `--explain` 后，返回中会包含适合 Agent 复述的排序解释：
+
+```json
+{
+  "explain": {
+    "why_top": ["exact title-family match", "year matched 2023"],
+    "why_not_others": ["candidate X demoted: dead pan link"]
+  }
 }
 ```
 
@@ -295,9 +320,10 @@ quarry/
 │       ├── ranking.py             # 打分、分层、去重
 │       ├── pan_probe.py           # 网盘链接存活探针
 │       ├── parsers.py             # 发布标签解析（分辨率、编码、HDR）
+│       ├── source_validation.py   # 自定义 SourceAdapter 契约验证
 │       ├── video_core.py          # 公共视频流水线（yt-dlp）
 │       ├── subdl.py / subhd.py / jimaku.py   # 字幕源
-│       └── sources/               # 24 个源适配器
+│       └── sources/               # 28 个源适配器
 │           ├── base.py            # HTTPClient（httpx → curl_cffi → urllib）
 │           ├── upyunso.py         # 网盘聚合器（AES 加密 API）
 │           ├── pansou.py          # PanSou 自建网盘聚合 API
@@ -316,7 +342,7 @@ quarry/
 ├── agents/
 │   ├── hermes.yaml                # Hermes Agent 技能配置
 │   └── openclaw.yaml              # OpenClaw Agent 技能配置
-├── tests/                         # 22 个单元 + 精度 + 基准测试
+├── tests/                         # 39 个单元、精度、CLI、视频与基准测试
 ├── references/                    # 架构、使用、源文档
 ├── SKILL.md                       # Agent 可读技能契约
 └── pyproject.toml
@@ -353,4 +379,4 @@ quarry/
 
 ## 反馈与交流
 
-如果你在使用过程中遇到任何 Bug，有新的功能需求（例如添加新的网盘或磁力源），或者对自定义适配器有任何疑问，非常欢迎你在 GitHub 提交 [Issue](https://github.com/mnbplus/quarry/issues/new) 与我们交流。同时也强烈欢迎提交 PR！
+如果你在使用过程中遇到任何 Bug，有新的功能需求（例如添加新的网盘或磁力源），或者对自定义适配器有任何疑问，非常欢迎你在 GitHub 提交 [Issue](https://github.com/taffy-owo/quarry/issues/new) 与我们交流。同时也强烈欢迎提交 PR！

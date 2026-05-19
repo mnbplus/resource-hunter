@@ -29,7 +29,7 @@ Files in `local/` are **user code** — they are gitignored and never touched by
 
 The engine auto-discovers everything in `local/`:
 - `local/sources/*.py` → auto-registered as source adapters on startup
-- `local/config.json` → auto-loaded as ranking weight overrides
+- `local/config.json` → auto-loaded as ranking weight and source runtime profile overrides
 - `local/.env` → auto-loaded with priority over root `.env`
 
 ---
@@ -56,6 +56,14 @@ class MyTrackerSource(SourceAdapter):
 ```
 
 That's it. The engine will auto-discover and register it on next startup.
+
+Validate the adapter before relying on it:
+
+```bash
+python scripts/hunt.py source validate local/sources/my_tracker.py --json
+```
+
+Use `--no-smoke` if the source cannot safely run a lightweight `search()` smoke test during validation.
 
 ### Required fields
 
@@ -106,7 +114,25 @@ You only need to include the fields you want to override — defaults apply for 
 
 If your custom source needs specific timeout/retry/cooldown settings, add a profile entry to `local/config.json`:
 
-> **Note**: Runtime profiles for custom sources are not yet auto-loaded from `local/config.json`. For now, the engine uses sensible defaults (timeout=10s, retries=1). This is planned for a future release.
+```json
+{
+  "source_runtime_profiles": {
+    "mytracker": {
+      "supported_kinds": ["movie", "tv", "general"],
+      "timeout": 12,
+      "retries": 1,
+      "cooldown_seconds": 180,
+      "failure_threshold": 2,
+      "query_budget": 2,
+      "degraded_score_penalty": 4,
+      "default_degraded": false,
+      "lenient_tls": false
+    }
+  }
+}
+```
+
+Use `lenient_tls: true` only for a source with known non-standard TLS behavior. The default is strict certificate validation.
 
 ---
 
@@ -139,6 +165,7 @@ Custom source adapters MUST:
 - Implement `search()` returning `list[SearchResult]`
 - Use the provided `http_client` for all HTTP requests (don't create your own)
 - Never import private modules or access internal state
+- Pass `python scripts/hunt.py source validate local/sources/my_source.py --json`
 
 ### 4. Don't modify these files unless fixing a bug
 

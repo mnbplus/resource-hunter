@@ -1,15 +1,15 @@
 ﻿<p align="center">
-  <a href="README.zh-CN.md">🇨🇳 简体中�?/a> | 🇺🇸 English
+  <a href="README.zh-CN.md">简体中文</a> | English
 </p>
 
 <div align="center">
   <h1>🎯 Quarry</h1>
   <p><em>Public resource routing engine purpose-built for AI Agents.</em></p>
-  <p>Multi-source discovery �?intelligent ranking �?verified delivery.</p>
+  <p>Multi-source discovery -> intelligent ranking -> verified delivery.</p>
 </div>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.1.0-d4af37?style=for-the-badge" alt="Version 1.1.0">
+  <img src="https://img.shields.io/badge/version-1.2.0-d4af37?style=for-the-badge" alt="Version 1.2.0">
   <img src="https://img.shields.io/badge/python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=fff" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/benchmark-pass-10b981?style=for-the-badge" alt="Benchmark Pass">
   <img src="https://img.shields.io/badge/zero--config-true-0ea5e9?style=for-the-badge" alt="Zero Config">
@@ -22,17 +22,17 @@
 
 Quarry is a **resource discovery engine** designed to be called by AI Agents (Hermes, OpenClaw, etc.).
 
-It doesn't download files �?it **finds** the best public routes (cloud drive links, magnet URIs, ebook pages) across 24 sources, ranks them by quality, verifies liveness, and returns structured JSON.
+It doesn't download files. It **finds** the best public routes (cloud drive links, magnet URIs, ebook pages) across 28 sources, ranks them by quality, verifies liveness, and returns structured JSON.
 
 ```
 User: "Find me Oppenheimer 4K resources"
 
-Agent translates �?hunt.py search "Oppenheimer 2023" --4k --json
+Agent translates -> hunt.py search "Oppenheimer 2023" --4k --json
 
 Engine returns:
-  �?Top 1: Oppenheimer.2023.2160p.BluRay.REMUX �?aliyun link (verified alive)
-  �?Top 2: Oppenheimer.2023.1080p.WEB-DL �?magnet (42 seeders)
-  �?Suppressed: Oppenheimer.CAM.720p �?risky quality
+  OK Top 1: Oppenheimer.2023.2160p.BluRay.REMUX -> aliyun link (verified alive)
+  OK Top 2: Oppenheimer.2023.1080p.WEB-DL -> magnet (42 seeders)
+  Suppressed: Oppenheimer.CAM.720p -> risky quality
 ```
 
 ---
@@ -47,16 +47,16 @@ Engine returns:
 |:--------|:--------|:----------------|
 | **Cloud Drive** | upyunso, pansou, ps.252035, panhunt | Aliyun, Quark, Baidu, 115, PikPak, Lanzou, etc. |
 | **Torrent** | torznab, nyaa, dmhy, bangumi_moe, eztv, torrentgalaxy, bitsearch, tpb, yts, 1337x, limetorrents, torlock, fitgirl, torrentmac, ext_to | Movies, TV, anime, games, music, macOS apps |
-| **Book** | annas (Anna's Archive), libgen (Library Genesis) | PDF, EPUB, MOBI, academic papers �?fiction & non-fiction |
+| **Book** | annas (Anna's Archive), libgen (Library Genesis) | PDF, EPUB, MOBI, academic papers, fiction & non-fiction |
 
 ### 📊 Intelligent Ranking
 
 - **Title-family matching**: canonical, phrase, token overlap scoring
 - **Quality parsing**: resolution, codec, HDR, source type, lossless audio
 - **Category-aware**: different scoring weights for movie/TV/anime/music/software/book
-- **Confidence tiers**: `top` �?`related` �?`risky` (suppressed by default)
+- **Confidence tiers**: `top` -> `related` -> `risky` (suppressed by default)
 
-### �?Pan Link Viability Probe
+### Pan Link Viability Probe
 
 Cloud drive links die constantly. The engine auto-probes before delivery:
 
@@ -66,19 +66,19 @@ Cloud drive links die constantly. The engine auto-probes before delivery:
 | Quark (Quark Drive) | Share token API | `alive` / `expired` |
 | Baidu (Baidu Netdisk) | Page dead-signal detection | `alive` / `removed` |
 
-Dead links �?auto-demoted to `risky` tier, never shown in text output.
+Dead links are auto-demoted to `risky` tier and never shown in text output.
 
-### 🛡�?Anti-Bot Layer (Optional)
+### Anti-Bot Layer (Optional)
 
 ```
-Priority chain:  httpx �?curl_cffi �?urllib
+Priority chain:  httpx -> curl_cffi -> urllib
 ```
 
-Install `curl-cffi` to bypass DDoS-Guard and similar TLS fingerprint checks. Zero config �?auto-detected.
+Install `curl-cffi` to bypass DDoS-Guard and similar TLS fingerprint checks. Zero config, auto-detected.
 
 ### 🎬 Video Pipeline
 
-Public video URL �?metadata extraction �?optional download:
+Public video URL -> metadata extraction -> optional download:
 
 ```bash
 hunt.py video probe "https://www.bilibili.com/video/BV..."
@@ -100,7 +100,7 @@ Sources: SubDL (multilingual), SubHD (Chinese), Jimaku (Japanese anime).
 ## Quick Start
 
 ```bash
-git clone https://github.com/mnbplus/quarry.git
+git clone https://github.com/taffy-owo/quarry.git
 cd quarry
 
 # Zero dependencies for basic search
@@ -117,6 +117,7 @@ pip install curl-cffi                # TLS fingerprint impersonation
 ```bash
 # Movies
 python3 scripts/hunt.py search "Oppenheimer 2023" --4k --json
+python3 scripts/hunt.py search "Oppenheimer 2023" --4k --json --explain
 
 # TV Shows
 python3 scripts/hunt.py search "Breaking Bad S05E16" --tv
@@ -141,9 +142,10 @@ python3 scripts/hunt.py search "Interstellar 2014" --no-probe
 
 ```bash
 python3 scripts/hunt.py sources --probe --json    # Source health check
-python3 scripts/hunt.py doctor --json              # System diagnostics
+python3 scripts/hunt.py doctor --json              # System diagnostics + source_health metrics
 python3 scripts/hunt.py benchmark                  # Offline precision benchmark
 python3 scripts/hunt.py cache stats --json         # Cache statistics
+python3 scripts/hunt.py source validate local/sources/my_source.py --json
 ```
 
 ### Updating
@@ -151,18 +153,18 @@ python3 scripts/hunt.py cache stats --json         # Cache statistics
 Updating is safe regardless of how you installed:
 
 ```bash
-# Git users �?just pull
+# Git users: just pull
 cd quarry && git pull
 
-# ZIP users �?download new ZIP, extract over the old folder
+# ZIP users: download new ZIP, extract over the old folder
 # (or delete and re-extract, both work)
 ```
 
-> **Auto-cleanup**: On first run after an update, the engine automatically detects and removes deprecated files from previous versions. No manual cleanup needed �?even if you extract a ZIP on top of an old installation.
+> **Auto-cleanup**: On first run after an update, the engine automatically detects and removes deprecated files from previous versions. No manual cleanup needed, even if you extract a ZIP on top of an old installation.
 
 ### Customization
 
-All user customizations go in the `local/` directory �?a **safe zone** that is never overwritten by updates:
+All user customizations go in the `local/` directory, a **safe zone** that is never overwritten by updates:
 
 ```text
 local/
@@ -170,6 +172,14 @@ local/
 ├── config.json       # Override ranking weights
 └── .env              # Override environment variables (takes priority over root .env)
 ```
+
+Validate custom adapters before relying on them:
+
+```bash
+python3 scripts/hunt.py source validate local/sources/my_tracker.py --json
+```
+
+`doctor --json` also exposes adaptive source-health rows such as `success_rate_24h`, `median_latency_ms`, `result_yield`, `top_hit_rate`, and `recommended_query_budget`. Quarry uses these cached metrics conservatively to prefer strong sources and reduce query budget for weak or recently failing ones.
 
 
 ### Optional: Token-Based Sources
@@ -191,21 +201,21 @@ TORZNAB_APIKEY=your-api-key
 ```
 
 > See [`references/sources.md`](./references/sources.md#how-to-obtain-tokens) for detailed step-by-step instructions.
-> Custom source adapters, ranking tweaks, and env variables in `local/` are **update-proof** �?`git pull` and ZIP updates both leave this directory untouched.
+> Custom source adapters, ranking tweaks, and env variables in `local/` are **update-proof**. `git pull` and ZIP updates both leave this directory untouched.
 
 ---
 
 ## Agent Integration
 
-Quarry is designed as an **AI Agent skill** �?it's meant to be called by Agents, not used directly by humans.
+Quarry is designed as an **AI Agent skill**. It's meant to be called by Agents, not used directly by humans.
 
 ### For Hermes / OpenClaw
 
 Agent config files are in `agents/`:
 
 ```yaml
-# agents/hermes.yaml �?Agent instructions include:
-# - Query translation workflow (CJK �?English)
+# agents/hermes.yaml - Agent instructions include:
+# - Query translation workflow (CJK -> English)
 # - Category-specific routing guidance
 # - Result interpretation (link_alive, tiers, penalties)
 # - Available command reference
@@ -216,7 +226,7 @@ Agent config files are in `agents/`:
 [`SKILL.md`](./SKILL.md) is the Agent-readable skill contract:
 
 - **When to use**: public resource discovery, release comparison, video probing
-- **Query normalization**: Agent MUST translate to English before searching
+- **Query normalization**: Agent should translate to English/romanized titles first; the engine has a best-effort CJK alias fallback for movie/TV/anime/general queries
 - **Result interpretation**: how to read `link_alive`, `tier`, `penalties`
 - **Category routing**: which sources fire first for each content type
 - **13 agent rules**: ordering, fallback behavior, format hints
@@ -225,6 +235,7 @@ Agent config files are in `agents/`:
 
 ```bash
 python3 scripts/hunt.py search "Oppenheimer 2023" --json
+python3 scripts/hunt.py search "Oppenheimer 2023" --json --explain
 ```
 
 ```json
@@ -251,13 +262,24 @@ python3 scripts/hunt.py search "Oppenheimer 2023" --json
 }
 ```
 
+With `--explain`, the response includes an agent-readable explanation:
+
+```json
+{
+  "explain": {
+    "why_top": ["exact title-family match", "year matched 2023"],
+    "why_not_others": ["candidate X demoted: dead pan link"]
+  }
+}
+```
+
 Key fields for Agents:
 
 | Field | Meaning |
 |:------|:--------|
 | `tier` | `top` = high confidence, `related` = decent, `risky` = unreliable |
 | `source_health.link_alive` | `true` = verified, `false` = dead (skip it), `null` = unknown |
-| `confidence` | 0.0 �?1.0 match confidence score |
+| `confidence` | 0.0 to 1.0 match confidence score |
 | `match_bucket` | `exact_title_family`, `title_family_match`, `weak_context_match`, etc. |
 | `canonical_identity` | Deduplication key (e.g. `movie:oppenheimer:2023`) |
 
@@ -285,14 +307,14 @@ flowchart LR
 
 ### Routing Matrix
 
-| Category | Primary �?Fallback | Key Signal |
+| Category | Primary -> Fallback | Key Signal |
 |:---------|:-------------------|:-----------|
-| Movie | Pan �?YTS/TorrentGalaxy/TPB �?1337x | Year match |
-| TV | EZTV/TorrentGalaxy/TPB �?Pan | S{XX}E{XX} |
-| Anime | Nyaa/DMHY/Bangumi Moe �?Pan | Romanized title |
-| Book | **Anna's Archive** �?Pan �?1337x/TorLock | Format (pdf/epub) |
-| Music | Pan �?DMHY/Nyaa (noise-filtered) | Lossless tags |
-| Software | Pan �?FitGirl/TorrentMac/TorrentGalaxy | Platform hint |
+| Movie | Pan -> YTS/TorrentGalaxy/TPB -> 1337x | Year match |
+| TV | EZTV/TorrentGalaxy/TPB -> Pan | S{XX}E{XX} |
+| Anime | Nyaa/DMHY/Bangumi Moe -> Pan | Romanized title |
+| Book | **Anna's Archive** -> Pan -> 1337x/TorLock | Format (pdf/epub) |
+| Music | Pan -> DMHY/Nyaa (noise-filtered) | Lossless tags |
+| Software | Pan -> FitGirl/TorrentMac/TorrentGalaxy | Platform hint |
 
 ---
 
@@ -301,38 +323,39 @@ flowchart LR
 ```text
 quarry/
 ├── scripts/
-�?  ├── hunt.py                    # CLI entrypoint
-�?  └── quarry/
-�?      ├── engine.py              # Search orchestration
-�?      ├── intent.py              # Query �?Intent �?SearchPlan
-�?      ├── ranking.py             # Scoring, tiers, deduplication
-�?      ├── pan_probe.py           # Cloud drive link viability probe
-�?      ├── parsers.py             # Release tag parsing (resolution, codec, HDR)
-�?      ├── config.py              # RankingConfig weights
-�?      ├── cache.py               # SQLite WAL cache
-�?      ├── video_core.py          # Public video pipeline (yt-dlp)
-�?      ├── subdl.py / subhd.py / jimaku.py   # Subtitle sources
-�?      └── sources/               # 28 source adapters
-�?          ├── base.py            # HTTPClient (httpx �?curl_cffi �?urllib)
-�?          ├── upyunso.py         # Cloud drive aggregator (AES encrypted API)
-�?          ├── pansou.py          # PanSou self-hosted pan aggregation API
-�?          ├── nyaa.py            # Anime torrents (RSS)
-�?          ├── dmhy.py            # 動漫花園 Chinese anime community (RSS)
-�?          ├── bangumi_moe.py     # Bangumi Moe anime torrents (JSON API)
-�?          ├── torrentgalaxy.py   # TorrentGalaxy general tracker (RARBG alt)
-�?          ├── torlock.py         # TorLock verified torrents
-�?          ├── ext_to.py          # EXT.to modern magnet search
-�?          ├── annas.py           # Anna's Archive books (HTML scraper)
-�?          ├── torznab.py         # Jackett/Prowlarr meta-indexer
-�?          └── ...                # eztv, bitsearch, tpb, yts, 1337x, etc.
+│   ├── hunt.py                    # CLI entrypoint
+│   └── quarry/
+│       ├── engine.py              # Search orchestration
+│       ├── intent.py              # Query -> Intent -> SearchPlan
+│       ├── ranking.py             # Scoring, tiers, deduplication
+│       ├── pan_probe.py           # Cloud drive link viability probe
+│       ├── parsers.py             # Release tag parsing (resolution, codec, HDR)
+│       ├── config.py              # RankingConfig weights
+│       ├── cache.py               # SQLite WAL cache
+│       ├── source_validation.py   # Custom SourceAdapter contract validator
+│       ├── video_core.py          # Public video pipeline (yt-dlp)
+│       ├── subdl.py / subhd.py / jimaku.py   # Subtitle sources
+│       └── sources/               # 28 source adapters
+│           ├── base.py            # HTTPClient (httpx -> curl_cffi -> urllib)
+│           ├── upyunso.py         # Cloud drive aggregator (AES encrypted API)
+│           ├── pansou.py          # PanSou self-hosted pan aggregation API
+│           ├── nyaa.py            # Anime torrents (RSS)
+│           ├── dmhy.py            # 動漫花園 Chinese anime community (RSS)
+│           ├── bangumi_moe.py     # Bangumi Moe anime torrents (JSON API)
+│           ├── torrentgalaxy.py   # TorrentGalaxy general tracker (RARBG alt)
+│           ├── torlock.py         # TorLock verified torrents
+│           ├── ext_to.py          # EXT.to modern magnet search
+│           ├── annas.py           # Anna's Archive books (HTML scraper)
+│           ├── torznab.py         # Jackett/Prowlarr meta-indexer
+│           └── ...                # eztv, bitsearch, tpb, yts, 1337x, etc.
 ├── agents/
-�?  ├── hermes.yaml                # Hermes Agent skill config
-�?  └── openclaw.yaml              # OpenClaw Agent skill config
-├── local/                         # 🛡�?User safe zone (gitignored contents)
-�?  ├── sources/                   # Custom source adapters (auto-discovered)
-�?  ├── config.json                # Ranking weight overrides
-�?  └── .env                       # Environment variable overrides
-├── tests/                         # 22 unit + precision + benchmark tests
+│   ├── hermes.yaml                # Hermes Agent skill config
+│   └── openclaw.yaml              # OpenClaw Agent skill config
+├── local/                         # User safe zone (gitignored contents)
+│   ├── sources/                   # Custom source adapters (auto-discovered)
+│   ├── config.json                # Ranking weight overrides
+│   └── .env                       # Environment variable overrides
+├── tests/                         # 39 unit, precision, CLI, video, and benchmark tests
 ├── references/                    # Architecture, usage, source docs
 ├── SKILL.md                       # Agent-readable skill contract
 ├── CHANGELOG.md
@@ -343,7 +366,7 @@ quarry/
 
 ## Scope
 
-| �?What this does | �?What this doesn't do |
+| What this does | What this doesn't do |
 |:---|:---|
 | Find public download routes | Download files |
 | Rank results by quality | Bypass DRM or logins |
@@ -379,8 +402,8 @@ python -m pytest tests/ -v
 
 ## License
 
-[MIT-0](./LICENSE) �?no attribution required.
+[MIT-0](./LICENSE), no attribution required.
 
 ## Feedback and Issues
 
-If you encounter any bugs, have feature requests, or need help with custom source adapters, please [open an issue](https://github.com/mnbplus/quarry/issues/new) on GitHub. Pull requests are also highly welcome!
+If you encounter any bugs, have feature requests, or need help with custom source adapters, please [open an issue](https://github.com/taffy-owo/quarry/issues/new) on GitHub. Pull requests are also highly welcome!

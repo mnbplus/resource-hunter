@@ -14,7 +14,7 @@ instructions: |
   CRITICAL WORKFLOW — you MUST follow this order:
 
   1. TRANSLATE the user's query to the official English or Romanized title BEFORE searching.
-     The search engine only matches against English release titles.
+     Most upstream sources index English or Romanized release titles. The engine has a best-effort CJK alias fallback for movie/TV/anime/general queries, but agent-side translation gives the best recall.
      Examples:
        黑袍纠察队 S05E03 → "The Boys S05E03"
        梦魇绝镇 S04E01 → "FROM S04E01"
@@ -33,9 +33,9 @@ instructions: |
   3. SEARCH using the translated query:
      hunt.py search "The Boys S05E03" --tv --json
 
-  4. If "No confident match", try alternative English titles or shorter names.
+  4. If "No confident match", try alternative English titles, Romanized titles, or shorter names.
 
-  5. INTERPRET RESULTS — pay attention to these v4.1 signals:
+  5. INTERPRET RESULTS — pay attention to these JSON v3 signals:
      - `source_health.link_alive`: true = verified active, false = dead link (skip it), null = unknown
      - `tier`: "top" = high confidence, "related" = decent match, "risky" = unreliable
      - `penalties`: watch for "dead link detected" (pan probe found a dead share)
@@ -43,7 +43,7 @@ instructions: |
      - For book results from "libgen" source: the link_or_magnet is a Library Genesis download page URL
 
   Available commands:
-    hunt.py search "<query>" [--kind movie|tv|anime|music|software|book] [--json]
+    hunt.py search "<query>" [--kind movie|tv|anime|music|software|book] [--json] [--explain]
     hunt.py search "<query>" --no-probe [--json]   # skip pan link viability check (faster)
     hunt.py subtitle "<title>" [--lang zh,en] [--season N] [--episode N] [--download] [--json]
     hunt.py sources [--probe] [--json]
@@ -51,6 +51,7 @@ instructions: |
     hunt.py video info|probe|download|subtitle <url> [--json]
     hunt.py cache stats|cleanup [--json]
     hunt.py benchmark [--json]
+    hunt.py source validate local/sources/my_source.py [--json]
 
   Category-specific guidance:
     - Movie/TV/Anime: pan links are probed for viability; dead links auto-demoted
@@ -70,6 +71,6 @@ instructions: |
   Customization rules (IMPORTANT — read before modifying code):
     - User customizations go in local/, NEVER in scripts/quarry/
     - Custom source adapters → local/sources/my_source.py (auto-discovered)
-    - Ranking weight overrides → local/config.json
+    - Ranking and source runtime profile overrides → local/config.json
     - API keys, proxies → local/.env (overrides root .env)
     - See CONTRIBUTING.md for the full adapter contract and examples

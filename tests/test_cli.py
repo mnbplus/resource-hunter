@@ -32,7 +32,9 @@ def test_cli_search_json(monkeypatch, capsys):
         "meta": {"cached": False},
     }
 
-    def fake_search(self, intent, plan=None, page=1, limit=8, use_cache=True, probe_links=True, max_sources=0):
+    def fake_search(self, intent, plan=None, page=1, limit=8, use_cache=True, probe_links=True, max_sources=0, explain=False):
+        if explain:
+            fake_response["explain"] = {"why_top": ["query match"], "why_not_others": []}
         return fake_response
 
     monkeypatch.setattr("quarry.engine.ResourceHunterEngine.search", fake_search)
@@ -41,6 +43,11 @@ def test_cli_search_json(monkeypatch, capsys):
     payload = json.loads(capsys.readouterr().out)
     assert payload["query"] == "test query"
     assert payload["results"][0]["password"] == "1234"
+
+    rc = cli.main(["search", "test query", "--json", "--explain"])
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["explain"]["why_top"] == ["query match"]
 
 
 def test_cli_sources_text(monkeypatch, capsys):
@@ -63,3 +70,95 @@ def test_cli_sources_text(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "2fun" in output
     assert "priority=1" in output
+
+
+def test_source_validate_accepts_adapter(tmp_path, capsys):
+    source_file = tmp_path / "my_source.py"
+    source_file.write_text(
+        """
+from quarry.sources.base import SourceAdapter
+from quarry.models import SearchResult
+
+class MySource(SourceAdapter):
+    name = "my_source"
+    channel = "torrent"
+    priority = 3
+
+    def search(self, query, intent, limit, page, http_client):
+        http_client.get_text("https://example.com")
+        return [SearchResult(channel="torrent", source=self.name, provider="magnet", title="Ubuntu", link_or_magnet="magnet:?xt=urn:btih:abc")]
+""",
+        encoding="utf-8",
+    )
+
+    rc = cli.main(["source", "validate", str(source_file), "--json"])
+
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["valid"] is True
+    assert payload["adapters"][0]["name"] == "my_source"
+
+
+def test_source_validate_rejects_missing_adapter(tmp_path, capsys):
+    source_file = tmp_path / "empty.py"
+    source_file.write_text("VALUE = 1\n", encoding="utf-8")
+
+    rc = cli.main(["source", "validate", str(source_file), "--json"])
+
+    assert rc == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["valid"] is False
+    assert "no SourceAdapter subclass found" in payload["errors"]
+
+
+def test_source_validate_rejects_smoke_failure(tmp_path, capsys):
+    source_file = tmp_path / "broken_search.py"
+    source_file.write_text(
+        """
+from quarry.sources.base import SourceAdapter
+
+class BrokenSearchSource(SourceAdapter):
+    name = "broken_search"
+    channel = "torrent"
+    priority = 3
+
+    def search(self, query, intent, limit, page, http_client):
+        raise RuntimeError("boom")
+""",
+        encoding="utf-8",
+    )
+
+    rc = cli.main(["source", "validate", str(source_file), "--json"])
+
+    assert rc == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["valid"] is False
+    assert payload["adapters"][0]["errors"] == ["search smoke test failed: boom"]
+
+
+def test_source_validate_rejects_init_failure_as_json(tmp_path, capsys):
+    source_file = tmp_path / "broken_init.py"
+    source_file.write_text(
+        """
+from quarry.sources.base import SourceAdapter
+
+class BrokenInitSource(SourceAdapter):
+    name = "broken_init"
+    channel = "torrent"
+    priority = 3
+
+    def __init__(self):
+        raise RuntimeError("init boom")
+
+    def search(self, query, intent, limit, page, http_client):
+        return []
+""",
+        encoding="utf-8",
+    )
+
+    rc = cli.main(["source", "validate", str(source_file), "--json"])
+
+    assert rc == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["valid"] is False
+    assert payload["adapters"][0]["errors"] == ["adapter initialization failed: init boom"]

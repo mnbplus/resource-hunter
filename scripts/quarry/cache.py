@@ -51,6 +51,7 @@ class ResourceCache:
                 create table if not exists source_status (
                     id integer primary key autoincrement,
                     source text not null,
+                    kind text not null default 'general',
                     channel text not null,
                     priority integer not null,
                     ok integer not null,
@@ -88,8 +89,19 @@ class ResourceCache:
                     searched_at text not null,
                     searched_epoch real not null
                 );
+                create table if not exists source_result_metrics (
+                    id integer primary key autoincrement,
+                    source text not null,
+                    kind text not null default 'general',
+                    channel text not null,
+                    result_count integer not null default 0,
+                    confident_count integer not null default 0,
+                    top_hit integer not null default 0,
+                    recorded_epoch real not null
+                );
                 """
             )
+            self._ensure_column(conn, "source_status", "kind", "kind text not null default 'general'")
             self._ensure_column(conn, "source_status", "degraded_reason", "degraded_reason text not null default ''")
             self._ensure_column(conn, "source_status", "recovery_state", "recovery_state text not null default 'unknown'")
             self._ensure_column(conn, "source_status", "last_success_epoch", "last_success_epoch real")
@@ -99,6 +111,8 @@ class ResourceCache:
             # Performance indexes
             conn.execute("create index if not exists idx_source_status_source_id on source_status(source, id desc)")
             conn.execute("create index if not exists idx_source_status_epoch on source_status(checked_epoch)")
+            conn.execute("create index if not exists idx_source_status_source_kind_epoch on source_status(source, kind, checked_epoch)")
+            conn.execute("create index if not exists idx_source_result_metrics_source_kind_epoch on source_result_metrics(source, kind, recorded_epoch)")
             conn.execute("create index if not exists idx_search_cache_expires on search_cache(expires_at)")
 
     def get_search_cache(self, cache_key: str) -> dict[str, Any] | None:
@@ -153,12 +167,13 @@ class ResourceCache:
             conn.execute(
                 """
                 insert into source_status
-                (source, channel, priority, ok, skipped, degraded, degraded_reason, recovery_state, last_success_epoch,
+                (source, kind, channel, priority, ok, skipped, degraded, degraded_reason, recovery_state, last_success_epoch,
                  latency_ms, error, failure_kind, checked_at, checked_epoch)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     status.source,
+                    status.kind,
                     status.channel,
                     status.priority,
                     1 if status.ok else 0,
@@ -173,6 +188,26 @@ class ResourceCache:
                     status.checked_at,
                     checked_epoch,
                 ),
+            )
+
+    def record_source_result_metrics(
+        self,
+        *,
+        source: str,
+        kind: str,
+        channel: str,
+        result_count: int,
+        confident_count: int,
+        top_hit: bool,
+    ) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                insert into source_result_metrics
+                (source, kind, channel, result_count, confident_count, top_hit, recorded_epoch)
+                values (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (source, kind, channel, result_count, confident_count, 1 if top_hit else 0, time.time()),
             )
 
     def list_source_statuses(self) -> list[dict[str, Any]]:
@@ -247,6 +282,68 @@ class ResourceCache:
             return False
         return all((row["ok"] == 0 and row["skipped"] == 0) for row in rows)
 
+    def source_health_metrics(self, source: str, kind: str = "general", window_seconds: int = 86400) -> dict[str, Any]:
+        cutoff = time.time() - window_seconds
+        with self._connect() as conn:
+            status_rows = conn.execute(
+                """
+                select ok, skipped, latency_ms
+                from source_status
+                where source = ? and kind = ? and checked_epoch >= ?
+                """,
+                (source, kind, cutoff),
+            ).fetchall()
+            metric_row = conn.execute(
+                """
+                select
+                    count(*) as attempts,
+                    coalesce(sum(result_count), 0) as result_count,
+                    coalesce(sum(confident_count), 0) as confident_count,
+                    coalesce(sum(top_hit), 0) as top_hits
+                from source_result_metrics
+                where source = ? and kind = ? and recorded_epoch >= ?
+                """,
+                (source, kind, cutoff),
+            ).fetchone()
+        attempts = len(status_rows)
+        real_attempts = [row for row in status_rows if not row["skipped"]]
+        successes = sum(1 for row in real_attempts if row["ok"])
+        latencies = sorted(int(row["latency_ms"]) for row in real_attempts if row["latency_ms"] is not None)
+        median_latency = None
+        if latencies:
+            middle = len(latencies) // 2
+            if len(latencies) % 2:
+                median_latency = latencies[middle]
+            else:
+                median_latency = int((latencies[middle - 1] + latencies[middle]) / 2)
+        result_attempts = int(metric_row["attempts"]) if metric_row else 0
+        result_count = int(metric_row["result_count"]) if metric_row else 0
+        confident_count = int(metric_row["confident_count"]) if metric_row else 0
+        top_hits = int(metric_row["top_hits"]) if metric_row else 0
+        success_rate = round(successes / len(real_attempts), 3) if real_attempts else None
+        avg_confident = round(confident_count / result_attempts, 2) if result_attempts else 0.0
+        result_yield = round(result_count / result_attempts, 2) if result_attempts else 0.0
+        top_hit_rate = round(top_hits / result_attempts, 3) if result_attempts else 0.0
+        recommended_query_budget = 1
+        if success_rate is None:
+            recommended_query_budget = 1
+        elif success_rate >= 0.9 and avg_confident >= 2:
+            recommended_query_budget = 3
+        elif success_rate >= 0.75 and avg_confident >= 1:
+            recommended_query_budget = 2
+        return {
+            "source": source,
+            "kind": kind,
+            "window_seconds": window_seconds,
+            "attempts_24h": attempts,
+            "success_rate_24h": success_rate,
+            "median_latency_ms": median_latency,
+            "result_yield": result_yield,
+            "avg_confident_results": avg_confident,
+            "top_hit_rate": top_hit_rate,
+            "recommended_query_budget": recommended_query_budget,
+        }
+
     def record_video_manifest(self, task_id: str, url: str, payload: dict[str, Any]) -> None:
         with self._connect() as conn:
             conn.execute(
@@ -301,6 +398,8 @@ class ResourceCache:
             deleted["alias_resolution"] = cursor.rowcount
             cursor = conn.execute("delete from source_status where checked_epoch < ?", (cutoff,))
             deleted["source_status"] = cursor.rowcount
+            cursor = conn.execute("delete from source_result_metrics where recorded_epoch < ?", (cutoff,))
+            deleted["source_result_metrics"] = cursor.rowcount
             video_cutoff = now - max_age_seconds * 7
             cursor = conn.execute("delete from video_manifest where created_at < ?", (video_cutoff,))
             deleted["video_manifest"] = cursor.rowcount
@@ -349,4 +448,3 @@ class ResourceCache:
                 (limit,),
             ).fetchall()
         return [dict(row) for row in rows]
-

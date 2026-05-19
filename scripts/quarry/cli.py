@@ -10,6 +10,7 @@ from .common import dump_json, ensure_utf8_stdio, storage_root
 from .engine import ResourceHunterEngine
 from .intent import build_plan, parse_intent
 from .rendering import format_benchmark_text, format_search_text, format_sources_text, search_response_to_v2
+from .source_validation import validate_source_file
 from .subdl import SubDLClient, format_subtitle_results
 from .subhd import SubHDClient
 from .jimaku import JimakuClient
@@ -86,6 +87,19 @@ def _format_doctor_text(payload: dict[str, Any]) -> str:
                 backoff = f" (backoff {m['backoff_remaining_s']}s)" if m.get("in_backoff") else ""
                 lines.append(f"    {status} {m['mirror']} {m['latency_ms']}ms{backoff}")
 
+    health_rows = payload.get("source_health", [])
+    if health_rows:
+        lines.append("")
+        lines.append("Source health (24h):")
+        for row in health_rows[:10]:
+            success = row.get("success_rate_24h")
+            latency = row.get("median_latency_ms")
+            lines.append(
+                f"  {row['source']}[{row['kind']}]: success={success} "
+                f"median={latency}ms yield={row['result_yield']} "
+                f"confident={row['avg_confident_results']} budget={row['recommended_query_budget']}"
+            )
+
     return "\n".join(lines)
 
 
@@ -110,7 +124,16 @@ def _search(engine: ResourceHunterEngine, args: argparse.Namespace) -> int:
     limit = min(args.limit, 5) if fast else args.limit
     probe = False if fast else (not args.no_probe)
     max_sources = 6 if fast else 0  # 0 = unlimited
-    response = engine.search(intent, plan=build_plan(intent), page=args.page, limit=limit, use_cache=not args.no_cache, probe_links=probe, max_sources=max_sources)
+    response = engine.search(
+        intent,
+        plan=build_plan(intent),
+        page=args.page,
+        limit=limit,
+        use_cache=not args.no_cache,
+        probe_links=probe,
+        max_sources=max_sources,
+        explain=args.explain,
+    )
     # Post-search filtering
     min_seeders = getattr(args, "min_seeders", 0)
     provider_filter = [p.strip().lower() for p in getattr(args, "provider", "").split(",") if p.strip()]
@@ -189,6 +212,19 @@ def _doctor(engine: ResourceHunterEngine, args: argparse.Namespace) -> int:
             "provider_count": len(_PROVIDER_PROBERS),
         },
     }
+    source_health_rows: list[dict[str, Any]] = []
+    source_payload = payload["sources"]
+    if isinstance(source_payload, dict):
+        raw_sources = source_payload.get("sources", [])
+        if isinstance(raw_sources, list):
+            for source in raw_sources:
+                if isinstance(source, dict):
+                    raw_metrics = source.get("health_metrics_by_kind", [])
+                    if isinstance(raw_metrics, list):
+                        for metric in raw_metrics:
+                            if isinstance(metric, dict):
+                                source_health_rows.append(metric)
+    payload["source_health"] = source_health_rows
     # Add mirror health if any mirrors have been tracked
     try:
         from .mirror_health import get_mirror_tracker
@@ -254,6 +290,27 @@ def _cache(engine: ResourceHunterEngine, args: argparse.Namespace) -> int:
             print(f"Cache database: {payload['db_path']}")
             print(f"Size: {payload['db_size_mb']} MB")
     return 0
+
+
+def _source(args: argparse.Namespace) -> int:
+    if args.source_cmd == "validate":
+        payload = validate_source_file(args.path, run_search=not args.no_smoke)
+        if args.json:
+            print(dump_json(payload))
+        else:
+            status = "valid" if payload["valid"] else "invalid"
+            print(f"Source file: {payload['path']}")
+            print(f"Status: {status}")
+            for error in payload.get("errors", []):
+                print(f"error: {error}")
+            for adapter in payload.get("adapters", []):
+                print(f"- {adapter['name'] or '<unnamed>'}: {'valid' if adapter['valid'] else 'invalid'}")
+                for error in adapter.get("errors", []):
+                    print(f"  error: {error}")
+                for warning in adapter.get("warnings", []):
+                    print(f"  warning: {warning}")
+        return 0 if payload["valid"] else 1
+    raise RuntimeError(f"unsupported source command: {args.source_cmd}")
 
 
 def _subtitle(args: argparse.Namespace) -> int:
@@ -374,6 +431,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_search.add_argument("--fast", action="store_true", help="Fast mode: top 6 sources, no probe, limit 5")
     p_search.add_argument("--min-seeders", type=int, default=0, help="Minimum seeders for torrent results")
     p_search.add_argument("--provider", type=str, default="", help="Comma-separated provider filter (e.g. aliyun,quark)")
+    p_search.add_argument("--explain", action="store_true", help="Include agent-readable ranking explanation in JSON output")
 
     p_sources = sub.add_parser("sources", help="Show configured resource sources")
     p_sources.add_argument("--probe", action="store_true")
@@ -431,6 +489,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_history.add_argument("--limit", type=int, default=20, help="Number of entries to show")
     p_history.add_argument("--json", action="store_true")
     p_history.add_argument("--export", choices=["csv", "markdown"], default=None, help="Export format")
+
+    p_source = sub.add_parser("source", help="Source adapter tooling")
+    source_sub = p_source.add_subparsers(dest="source_cmd", required=True)
+    p_source_validate = source_sub.add_parser("validate", help="Validate a SourceAdapter file")
+    p_source_validate.add_argument("path")
+    p_source_validate.add_argument("--no-smoke", action="store_true", help="Skip search() smoke test")
+    p_source_validate.add_argument("--json", action="store_true")
     return parser
 
 
@@ -474,7 +539,7 @@ def _history(engine: ResourceHunterEngine, args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     ensure_utf8_stdio()
     argv = list(argv if argv is not None else sys.argv[1:])
-    if argv and argv[0] not in {"search", "sources", "doctor", "video", "benchmark", "cache", "subtitle", "history"}:
+    if argv and argv[0] not in {"search", "sources", "doctor", "video", "benchmark", "cache", "subtitle", "history", "source"}:
         argv = ["search"] + argv
 
     parser = build_parser()
@@ -499,9 +564,10 @@ def main(argv: list[str] | None = None) -> int:
             return _cache(engine, args)
         if args.command == "history":
             return _history(engine, args)
+        if args.command == "source":
+            return _source(args)
     except RuntimeError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     parser.print_help()
     return 0
-

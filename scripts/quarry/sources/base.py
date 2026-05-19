@@ -14,6 +14,7 @@ import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 _logger = logging.getLogger(__name__)
@@ -29,7 +30,12 @@ def _lenient_ssl_context() -> ssl.SSLContext:
     return ctx
 
 
-def _urllib_opener() -> urllib.request.OpenerDirector:
+def _strict_ssl_context() -> ssl.SSLContext:
+    """Create the default certificate-validating SSL context."""
+    return ssl.create_default_context()
+
+
+def _urllib_opener(lenient_tls: bool = False) -> urllib.request.OpenerDirector:
     """Build an opener that respects HTTPS_PROXY env var."""
     proxy_url = (
         os.environ.get("HTTPS_PROXY")
@@ -38,7 +44,7 @@ def _urllib_opener() -> urllib.request.OpenerDirector:
         or os.environ.get("http_proxy")
     )
     handlers: list[urllib.request.BaseHandler] = [
-        urllib.request.HTTPSHandler(context=_lenient_ssl_context()),
+        urllib.request.HTTPSHandler(context=_lenient_ssl_context() if lenient_tls else _strict_ssl_context()),
     ]
     if proxy_url:
         handlers.append(urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url}))
@@ -50,7 +56,7 @@ except ImportError:
     _httpx = None  # type: ignore[assignment]
 
 try:
-    from curl_cffi.requests import Session as _CffiSession  # type: ignore[import-untyped]
+    from curl_cffi.requests import Session as _CffiSession  # type: ignore[import-not-found,import-untyped]
 except ImportError:
     _CffiSession = None  # type: ignore[assignment,misc]
 
@@ -91,6 +97,7 @@ class SourceRuntimeProfile:
     failure_threshold: int
     query_budget: int
     default_degraded: bool = False
+    lenient_tls: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -102,7 +109,48 @@ class SourceRuntimeProfile:
             "failure_threshold": self.failure_threshold,
             "query_budget": self.query_budget,
             "default_degraded": self.default_degraded,
+            "lenient_tls": self.lenient_tls,
         }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any], base: "SourceRuntimeProfile") -> "SourceRuntimeProfile":
+        def as_int(key: str, fallback: int) -> int:
+            value = data.get(key, fallback)
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return fallback
+
+        def as_bool(key: str, fallback: bool) -> bool:
+            value = data.get(key, fallback)
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, str):
+                lowered = value.strip().lower()
+                if lowered in {"true", "1", "yes", "on"}:
+                    return True
+                if lowered in {"false", "0", "no", "off"}:
+                    return False
+            return fallback
+
+        supported = data.get("supported_kinds", base.supported_kinds)
+        if isinstance(supported, str):
+            supported_kinds = tuple(item.strip() for item in supported.split(",") if item.strip())
+        elif isinstance(supported, list):
+            supported_kinds = tuple(str(item) for item in supported if str(item).strip())
+        else:
+            supported_kinds = base.supported_kinds
+        return cls(
+            supported_kinds=supported_kinds or base.supported_kinds,
+            timeout=as_int("timeout", base.timeout),
+            retries=as_int("retries", base.retries),
+            degraded_score_penalty=as_int("degraded_score_penalty", base.degraded_score_penalty),
+            cooldown_seconds=as_int("cooldown_seconds", base.cooldown_seconds),
+            failure_threshold=as_int("failure_threshold", base.failure_threshold),
+            query_budget=as_int("query_budget", base.query_budget),
+            default_degraded=as_bool("default_degraded", base.default_degraded),
+            lenient_tls=as_bool("lenient_tls", base.lenient_tls),
+        )
 
 
 SOURCE_RUNTIME_PROFILES: dict[str, SourceRuntimeProfile] = {
@@ -134,6 +182,7 @@ SOURCE_RUNTIME_PROFILES: dict[str, SourceRuntimeProfile] = {
     "yts": SourceRuntimeProfile(
         supported_kinds=("movie",),
         timeout=12, retries=1, degraded_score_penalty=16, cooldown_seconds=90, failure_threshold=2, query_budget=2, default_degraded=False,
+        lenient_tls=True,
     ),
     "1337x": SourceRuntimeProfile(
         supported_kinds=("movie", "tv", "anime", "software", "book", "general"),
@@ -230,14 +279,54 @@ SOURCE_RUNTIME_PROFILES: dict[str, SourceRuntimeProfile] = {
 }
 
 
-def profile_for(source_name: str) -> SourceRuntimeProfile:
-    return SOURCE_RUNTIME_PROFILES.get(
-        source_name,
-        SourceRuntimeProfile(
-            supported_kinds=("general",), timeout=10, retries=1,
-            degraded_score_penalty=0, cooldown_seconds=180, failure_threshold=2, query_budget=2,
-        ),
+def _default_runtime_profile() -> SourceRuntimeProfile:
+    return SourceRuntimeProfile(
+        supported_kinds=("general",), timeout=10, retries=1,
+        degraded_score_penalty=0, cooldown_seconds=180, failure_threshold=2, query_budget=2,
     )
+
+
+_LOCAL_RUNTIME_PROFILES: dict[str, dict[str, Any]] | None = None
+
+
+def _local_config_path() -> Path:
+    override = os.environ.get("QUARRY_LOCAL_CONFIG", "").strip()
+    if override:
+        return Path(override)
+    return Path(__file__).resolve().parents[3] / "local" / "config.json"
+
+
+def _load_local_runtime_profiles() -> dict[str, dict[str, Any]]:
+    global _LOCAL_RUNTIME_PROFILES
+    if _LOCAL_RUNTIME_PROFILES is not None:
+        return _LOCAL_RUNTIME_PROFILES
+    config_path = _local_config_path()
+    if not config_path.is_file():
+        _LOCAL_RUNTIME_PROFILES = {}
+        return _LOCAL_RUNTIME_PROFILES
+    try:
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        _logger.warning("failed to load local source runtime profiles from %s: %s", config_path, exc)
+        _LOCAL_RUNTIME_PROFILES = {}
+        return _LOCAL_RUNTIME_PROFILES
+    profiles = payload.get("source_runtime_profiles", {})
+    if not isinstance(profiles, dict):
+        _logger.warning("source_runtime_profiles in %s must be an object", config_path)
+        _LOCAL_RUNTIME_PROFILES = {}
+        return _LOCAL_RUNTIME_PROFILES
+    _LOCAL_RUNTIME_PROFILES = {
+        str(name): data for name, data in profiles.items() if isinstance(data, dict)
+    }
+    return _LOCAL_RUNTIME_PROFILES
+
+
+def profile_for(source_name: str) -> SourceRuntimeProfile:
+    base = SOURCE_RUNTIME_PROFILES.get(source_name, _default_runtime_profile())
+    overrides = _load_local_runtime_profiles().get(source_name)
+    if overrides:
+        return SourceRuntimeProfile.from_dict(overrides, base)
+    return base
 
 
 class HTTPClient:
@@ -249,9 +338,10 @@ class HTTPClient:
     - urllib:    zero-dependency fallback, always available
     """
 
-    def __init__(self, retries: int = 1, default_timeout: int = 10) -> None:
+    def __init__(self, retries: int = 1, default_timeout: int = 10, lenient_tls: bool = False) -> None:
         self.retries = retries
         self.default_timeout = default_timeout
+        self.lenient_tls = lenient_tls
         self._session: Any = None
         self._cffi_session: Any = None
         self._use_httpx = _httpx is not None
@@ -266,8 +356,10 @@ class HTTPClient:
                 "timeout": self.default_timeout,
                 "follow_redirects": True,
                 "headers": DEFAULT_HEADERS,
-                "transport": _httpx.HTTPTransport(retries=self.retries, verify=_lenient_ssl_context()),
-                "verify": _lenient_ssl_context(),
+                "transport": _httpx.HTTPTransport(
+                    retries=self.retries,
+                    verify=_lenient_ssl_context() if self.lenient_tls else _strict_ssl_context(),
+                ),
             }
             if proxy_url:
                 kwargs["proxy"] = proxy_url
@@ -312,7 +404,7 @@ class HTTPClient:
     def _request_urllib(self, url: str, timeout: int | None = None) -> str:
         timeout = timeout or self.default_timeout
         last_error = ""
-        opener = _urllib_opener()
+        opener = _urllib_opener(lenient_tls=self.lenient_tls)
         for attempt in range(self.retries + 1):
             request = urllib.request.Request(url, headers=DEFAULT_HEADERS)
             try:
@@ -334,7 +426,7 @@ class HTTPClient:
         last_error = ""
         merged_headers = {**DEFAULT_HEADERS, **headers, "Content-Type": "application/json"}
         data = json.dumps(json_data).encode("utf-8")
-        opener = _urllib_opener()
+        opener = _urllib_opener(lenient_tls=self.lenient_tls)
         for attempt in range(self.retries + 1):
             request = urllib.request.Request(url, data=data, headers=merged_headers, method="POST")
             try:
@@ -362,6 +454,7 @@ class HTTPClient:
                 "impersonate": "chrome",
                 "timeout": self.default_timeout,
                 "headers": DEFAULT_HEADERS,
+                "verify": not self.lenient_tls,
             }
             if proxy_url:
                 kwargs["proxies"] = {"http": proxy_url, "https": proxy_url}

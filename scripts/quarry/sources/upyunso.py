@@ -29,8 +29,8 @@ try:
     _HAS_CRYPTO = True
 except ImportError:
     try:
-        from Cryptodome.Cipher import AES  # type: ignore[no-redef]
-        from Cryptodome.Util.Padding import pad, unpad  # type: ignore[no-redef]
+        from Cryptodome.Cipher import AES  # type: ignore[import-not-found,no-redef]
+        from Cryptodome.Util.Padding import pad, unpad  # type: ignore[import-not-found,no-redef]
         _HAS_CRYPTO = True
     except ImportError:
         _HAS_CRYPTO = False
